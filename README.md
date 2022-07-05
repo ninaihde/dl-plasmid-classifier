@@ -1,2 +1,1 @@
-# dl-plasmid-classifier
-Deep Learning-based Plasmid Classifier
+# Deep Learning-based Plasmid Classifier
