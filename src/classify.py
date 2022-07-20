@@ -8,17 +8,13 @@ import torch
 from model import Bottleneck, ResNet
 from ont_fast5_api.fast5_interface import get_fast5_file
 from scipy import stats
-from torch import nn
-from torch.nn import CrossEntropyLoss
-from torch.nn import functional as F
-from torch.optim import Adam
-from torch.utils.data import DataLoader
-from torch.utils.data.dataset import Dataset
 
 
 ########################
 ##### Normalization ####
 ########################
+# TODO: save read ids if known
+# TODO: add seq_len as parameter
 def normalization(data_test, batchi):
     mad = stats.median_abs_deviation(data_test, axis=1, scale='normal')
     m = np.median(data_test, axis=1)
@@ -56,6 +52,7 @@ def process(data_test, data_name, batchi, bmodel, outfile, device):
 ########################
 #### Load the data #####
 ########################
+# TODO: add seq_len as script arg
 def get_raw_data(infile, fileNM, data_test, data_name, cutoff):
     fast5_filepath = os.path.join(infile, fileNM)
     with get_fast5_file(fast5_filepath, mode="r") as f5:
@@ -71,7 +68,7 @@ def get_raw_data(infile, fileNM, data_test, data_name, cutoff):
 @click.option('--model', '-m', help='The pretrained model path and name', type=click.Path(exists=True))
 @click.option('--infile', '-i', help='The input fast5 folder path', type=click.Path(exists=True))
 @click.option('--outfile', '-o', help='The output result folder path', type=click.Path())
-@click.option('--batch', '-b', default=1, help='Batch size')
+@click.option('--batch', '-b', default=1, help='Batch size')  # sort by time, should be representative
 @click.option('--cutoff', '-c', default=1500, help='Cutoff the first c signals')
 def main(model, infile, outfile, batch, cutoff):
     start_time = time.time()

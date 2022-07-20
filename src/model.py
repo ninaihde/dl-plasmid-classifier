@@ -1,9 +1,6 @@
 import torch
 
 from torch import nn
-from torch.nn import CrossEntropyLoss
-from torch.nn import functional as F
-from torch.optim import Adam
 
 
 def conv3(in_channel, out_channel, stride=1, padding=1, groups=1):

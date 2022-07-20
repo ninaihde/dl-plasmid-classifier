@@ -4,11 +4,11 @@ from torch.utils.data.dataset import Dataset
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, zmFile, hlFile):
-        z = torch.load(zmFile)
-        h = torch.load(hlFile)
-        self.data = torch.cat((z, h))
-        self.label = torch.cat((torch.zeros(z.shape[0]), torch.ones(h.shape[0])))  # human: 1, others: 0
+    def __init__(self, p_data, chr_data):
+        p = torch.load(p_data)
+        c = torch.load(chr_data)
+        self.data = torch.cat((p, c))
+        self.label = torch.cat((torch.zeros(p.shape[0]), torch.ones(c.shape[0])))  # plasmids: 1, chromosomes: 0
 
     def __len__(self):
         return len(self.label)
