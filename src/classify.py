@@ -1,4 +1,5 @@
 import click
+import csv
 import glob
 import numpy as np
 import os
@@ -13,9 +14,7 @@ from scipy import stats
 ########################
 ##### Normalization ####
 ########################
-# TODO: save read ids if known
-# TODO: add seq_len as parameter
-def normalization(data_test, batchi):
+def normalize(data_test, batch_idx, max_seq_len):
     mad = stats.median_abs_deviation(data_test, axis=1, scale='normal')
     m = np.median(data_test, axis=1)
     data_test = ((data_test - np.expand_dims(m, axis=1)) * 1.0) / (1.4826 * np.expand_dims(mad, axis=1))
@@ -24,90 +23,94 @@ def normalization(data_test, batchi):
     for i in range(x[0].shape[0]):
         if x[1][i] == 0:
             data_test[x[0][i], x[1][i]] = data_test[x[0][i], x[1][i] + 1]
-        elif x[1][i] == 2999:
+        elif x[1][i] == (max_seq_len - 1):
             data_test[x[0][i], x[1][i]] = data_test[x[0][i], x[1][i] - 1]
         else:
             data_test[x[0][i], x[1][i]] = (data_test[x[0][i], x[1][i] - 1] + data_test[x[0][i], x[1][i] + 1]) / 2
 
     data_test = torch.tensor(data_test).float()
 
-    print("[Step 2]$$$$$$$$$$ Done data normalization with batch " + str(batchi))
+    print(f'[Step 2]$$$$$$$$$$ Done data normalization with batch {str(batch_idx)}')
     return data_test
 
 
 ########################
 ####### Run Test #######
 ########################
-def process(data_test, data_name, batchi, bmodel, outfile, device):
+def process(data_test, data_name, batch_idx, bmodel, outpath, device):
     with torch.no_grad():
-        testx = data_test.to(device)
-        outputs_test = bmodel(testx)
-        with open(outfile + '/batch_' + str(batchi) + '.txt', 'w') as f:
-            for nm, val in zip(data_name, outputs_test.max(dim=1).indices.int().data.cpu().numpy()):
-                f.write(nm + '\t' + str(val) + '\n')
-        print("[Step 3]$$$$$$$$$$ Done processing with batch " + str(batchi))
-        del outputs_test
+        data = data_test.to(device)
+        outputs = bmodel(data)
+        with open(f'{outpath}/batch_{str(batch_idx)}.csv', 'w', newline='\n') as f:
+            csv_writer = csv.writer(f)
+            csv_writer.writerow(['Read ID', 'Predicted Label'])
+            for read_id, label_nr in zip(data_name, outputs.max(dim=1).indices.int().data.cpu().numpy()):
+                label = 'plasmid' if label_nr == 1 else 'chr'
+                csv_writer.writerow([read_id, label])
+        print(f'[Step 3]$$$$$$$$$$ Done processing with batch {str(batch_idx)}')
+        del outputs
 
 
 ########################
 #### Load the data #####
 ########################
-# TODO: add seq_len as script arg
-def get_raw_data(infile, fileNM, data_test, data_name, cutoff):
-    fast5_filepath = os.path.join(infile, fileNM)
-    with get_fast5_file(fast5_filepath, mode="r") as f5:
+def get_raw_data(file, data_test, data_name, cutoff, max_seq_len):
+    with get_fast5_file(file, mode='r') as f5:
         for read in f5.get_reads():
             raw_data = read.get_raw_data(scale=True)
-            if len(raw_data) >= (cutoff + 3000):
-                data_test.append(raw_data[cutoff:(cutoff + 3000)])
+            if len(raw_data) >= (cutoff + max_seq_len):
+                data_test.append(raw_data[cutoff:(cutoff + max_seq_len)])
                 data_name.append(read.read_id)
     return data_test, data_name
 
 
 @click.command()
-@click.option('--model', '-m', help='The pretrained model path and name', type=click.Path(exists=True))
-@click.option('--infile', '-i', help='The input fast5 folder path', type=click.Path(exists=True))
-@click.option('--outfile', '-o', help='The output result folder path', type=click.Path())
-@click.option('--batch', '-b', default=1, help='Batch size')  # sort by time, should be representative
-@click.option('--cutoff', '-c', default=1500, help='Cutoff the first c signals')
-def main(model, infile, outfile, batch, cutoff):
+@click.option('--model', '-m', help='path to pre-trained model', type=click.Path(exists=True))
+@click.option('--inpath', '-i', help='path to folder with input fast5 data', type=click.Path(exists=True))
+@click.option('--outpath', '-o', help='output result folder path', type=click.Path())
+@click.option('--max_seq_len', '-s', default=3000, help='number of raw signals used per read')
+@click.option('--batch', '-b', default=1, help='batch size')  # test data is sorted by time, so should be representative
+@click.option('--cutoff', '-c', default=1000, help='cutoff the first c signals')
+def main(model, inpath, outpath, max_seq_len, batch, cutoff):
     start_time = time.time()
-    if torch.cuda.is_available: device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    print("Device: " + str(device))
 
-    ### make output folder
-    if not os.path.exists(outfile):
-        os.makedirs(outfile)
+    # set device
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    print(f'Device: {device}')
 
-    ### load model
-    bmodel = ResNet(Bottleneck, [2, 2, 2, 2]).to(device).eval()
+    if not os.path.exists(outpath):
+        os.makedirs(outpath)
+
+    # load pre-trained model
+    layers = [2, 2, 2, 2]
+    bmodel = ResNet(Bottleneck, layers).to(device).eval()
     bmodel.load_state_dict(torch.load(model, map_location=device))
-    print("[Step 0]$$$$$$$$$$ Done loading model")
+    print('[Step 0]$$$$$$$$$$ Done loading model')
 
-    ### load data
     data_test = []
-    data_name = []
-    batchi = 0
+    data_name = []  # read ids
+    batch_idx = 0
     it = 0
-    for fileNM in glob.glob(infile + '/*.fast5'):
-        data_test, data_name = get_raw_data(infile, fileNM, data_test, data_name, cutoff)
+    for file in glob.glob(inpath + '/*.fast5'):
+        data_test, data_name = get_raw_data(file, data_test, data_name, cutoff, max_seq_len)
         it += 1
 
         if it == batch:
-            print("[Step 1]$$$$$$$$$$ Done loading data with batch " + str(batchi) + \
-                  ", Getting " + str(len(data_test)) + " of sequences")
-            data_test = normalization(data_test, batchi)
-            process(data_test, data_name, batchi, bmodel, outfile, device)
-            print("[Step 4]$$$$$$$$$$ Done with batch " + str(batchi))
-            print()
+            print(f'[Step 1]$$$$$$$$$$ Done loading data with batch {str(batch_idx)}, '
+                  f'Getting {str(len(data_test))} of sequences')
+            data_test = normalize(data_test, batch_idx, max_seq_len)
+            process(data_test, data_name, batch_idx, bmodel, outpath, device)
+            print(f'[Step 4]$$$$$$$$$$ Done with batch {str(batch_idx)}\n')
+
             del data_test
             data_test = []
             del data_name
             data_name = []
-            batchi += 1
+
+            batch_idx += 1
             it = 0
 
-    print("[Step FINAL]--- %s seconds ---" % (time.time() - start_time))
+    print(f'[Step FINAL] --- {time.time() - start_time} seconds ---')
 
 
 if __name__ == '__main__':
