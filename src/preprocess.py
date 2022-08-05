@@ -52,7 +52,7 @@ def split(paths, train_percentage, val_percentage, random_gen):
 
 def move_files(outpath, ds):
     # create folder if it does not exist yet
-    folder_path = f'{outpath}/prototype_{ds[1]}'
+    folder_path = f'{outpath}/prepared_{ds[1]}'
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
@@ -69,10 +69,12 @@ def move_files(outpath, ds):
 
         print(f'Files of dataset {ds[1]} successfully moved')
     else:
-        print(f'Files of dataset {ds[1]} already moved')
+        print(f'Files of dataset {ds[1]} were already moved')
 
 
-def normalize(data, batch_idx, outpath_ds, ds_name, max_seq_len, use_single_batch=False):
+def normalize(data, longest_max_seq_len):
+    data = np.array(data)
+
     # normalize using z-score with median absolute deviation
     mad = stats.median_abs_deviation(data, axis=1, scale='normal')
     m = np.median(data, axis=1)
@@ -85,36 +87,54 @@ def normalize(data, batch_idx, outpath_ds, ds_name, max_seq_len, use_single_batc
     for i in range(x[0].shape[0]):
         if x[1][i] == 0:
             data[x[0][i], x[1][i]] = data[x[0][i], x[1][i] + 1]
-        elif x[1][i] == (max_seq_len - 1):
+        elif x[1][i] == (longest_max_seq_len - 1):
             data[x[0][i], x[1][i]] = data[x[0][i], x[1][i] - 1]
         else:
             data[x[0][i], x[1][i]] = (data[x[0][i], x[1][i] - 1] + data[x[0][i], x[1][i] + 1]) / 2
 
-    # save as torch tensor (overwrites already existing file)
+    return [list(r) for r in data]
+
+
+def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
+    # Note: overwrites already existing file
     data = torch.tensor(data).float()
-    tensor_path = f'{outpath_ds}/{ds_name.split("_")[1]}_{ds_name.split("_")[2]}' \
+    tensor_path = f'{outpath_ds}/{outpath_ds.split("_")[-2]}_{outpath_ds.split("_")[-1]}' \
                   f'{"" if use_single_batch else "_" + str(batch_idx)}.pt'
     torch.save(data, tensor_path)
     print(f'Torch tensor saved: {tensor_path}')
 
 
 @click.command()
-@click.option('--inpath', '-in',
-              help='input directory path with folder per run, each run folder must contain a folder per class',
-              type=click.Path(exists=True))
-@click.option('--outpath', '-out',
-              help='output directory path, folder per dataset with tensor files will be created',
-              type=click.Path())
-@click.option('--train_pct', '-tp', default=0.6, help='splitting percentage for training set')
-@click.option('--val_pct', '-vp', default=0.2, help='splitting percentage for validation set')
-@click.option('--min_seq_len', '-min', default=2000, help='minimum number of raw signals used per read')
-@click.option('--max_seq_len', '-max', default=10000, help='maximum number of raw signals used per read')
+@click.option('--inpath', '-i', type=click.Path(exists=True),
+              help='input directory path with folder per run, each run folder must contain a folder per class')
+@click.option('--outpath', '-o', type=click.Path(),
+              help='output directory path, folder per dataset with tensor files will be created')
+@click.option('--train_pct', '-t', default=0.8, help='splitting percentage for training set')
+@click.option('--val_pct', '-v', default=0.1, help='splitting percentage for validation set')
+@click.option('--cutoff', '-c', default=1000, help='cutoff the first c signals')
+@click.option('--min_seq_len', '-min', default=2000, help='minimum number of raw signals (after cutoff) used per read')
+@click.option('--max_seq_len', '-max', default=8000, help='maximum number of raw signals (after cutoff) used per read')
+@click.option('--longest_max_seq_len', '-lmax', default=8000,
+              help='longest maximum number of raw signals (after cutoff) used per read in all compared runs. Set to '
+                   'max_seq_len if only one run will be executed.')
 @click.option('--random_seed', '-s', default=42, help='seed for random operations')
 @click.option('--batch_size', '-b', default=10000, help='batch size, set to zero to use whole dataset size')
-@click.option('--cutoff', '-c', default=1000, help='cutoff the first c signals')
-def main(inpath, outpath, train_pct, val_pct, min_seq_len, max_seq_len, random_seed, batch_size, cutoff):
+def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, longest_max_seq_len, random_seed,
+         batch_size):
     if not os.path.exists(outpath):
         os.makedirs(outpath)
+
+    # check script arguments
+    if (train_pct <= 0.0) or (val_pct <= 0.0):
+        raise ValueError('Chosen training and/or validation percentage must be bigger than 0.0!')
+    if train_pct + val_pct >= 1.0:
+        raise ValueError('In total, chosen training and validation percentage must be smaller than 1.0! Please adjust '
+                         'these percentages to allow for a valid testing percentage.')
+    if min_seq_len >= max_seq_len:
+        raise ValueError('The minimum sequence length must be smaller than the maximum sequence length!')
+    if max_seq_len > longest_max_seq_len:
+        raise ValueError('The maximum sequence length must be smaller than or equal to the longest maximum sequence '
+                         'length!')
 
     random_gen = random.default_rng(random_seed)
 
@@ -127,10 +147,9 @@ def main(inpath, outpath, train_pct, val_pct, min_seq_len, max_seq_len, random_s
     if batch_size == 0:
         use_single_batch = True
 
-    # TODO: change '\\' to '/' & remove replace()
-    for ds in [x.split('\\')[-1] for x in glob.glob(f'{outpath}/*')
-               if x != inpath.replace('/', '\\') and x.split('\\')[-1].startswith('prototype')]:
-        print(f'\nDataset: {ds}')
+    # TODO: change '\\' to '/'
+    for ds_name in [x.split('\\')[-1] for x in glob.glob(f'{outpath}/*') if x.split('\\')[-1].startswith('prepared')]:
+        print(f'\nDataset: {ds_name}')
 
         if 'reads' in locals():
             del reads
@@ -138,64 +157,61 @@ def main(inpath, outpath, train_pct, val_pct, min_seq_len, max_seq_len, random_s
 
         batch_idx = 0
 
-        # create file for ground truth labels
-        if ds.endswith('test'):
+        # create file for ground truth labels of test dataset
+        if ds_name.endswith('test'):
             # ensure that already existing file is replaced
-            if os.path.isfile(f'{inpath}/test_data_labels.csv'):
-                os.remove(f'{inpath}/test_data_labels.csv')
-            ids_file = open(f'{inpath}/test_data_labels.csv', 'w', newline='\n')
+            if os.path.isfile(f'{outpath}/gt_test_labels.csv'):
+                os.remove(f'{outpath}/gt_test_labels.csv')
+            ids_file = open(f'{outpath}/gt_test_labels.csv', 'w', newline='\n')
             csv_writer = csv.writer(ids_file)
             csv_writer.writerow(['Read ID', 'GT Label'])
-        else:
-            # ensure that already existing file is replaced
-            if os.path.isfile(f'{inpath}/read_ids_{ds}.txt'):
-                os.remove(f'{inpath}/read_ids_{ds}.txt')
-            ids_file = open(f'{inpath}/read_ids_{ds}.txt', 'w')
 
-        for file in glob.glob(f'{outpath}/{ds}/*.fast5'):
+        for file_idx, file in enumerate(glob.glob(f'{outpath}/{ds_name}/*.fast5')):
             print(f'File: {file}')
             label = re.split('[_.]+', file)[-2]
 
             with get_fast5_file(file, mode='r') as f5:
-                for read in f5.get_reads():
-                    # store ground truth labels (i.e., read ids per dataset or with labels)
-                    if ds.endswith('test'):
+                for read_idx, read in enumerate(f5.get_reads()):
+                    # store ground truth labels for test dataset
+                    if ds_name.endswith('test'):
                         csv_writer.writerow([read.read_id, label])
                         continue
-                    else:
-                        ids_file.write(f'{read.read_id}\n')
 
                     # get raw signals and convert to pA values
                     raw_data = read.get_raw_data(scale=True)
 
-                    # generate random sequence length between min and max sequence length
-                    seq_len = random_gen.integers(min_seq_len, max_seq_len + 1)
-
                     # only parse reads that are long enough
-                    if len(raw_data) >= (cutoff + seq_len):
+                    if len(raw_data) >= (cutoff + longest_max_seq_len):
                         batch_idx += 1
 
-                        # remove cutoff and signals after random sequence length
-                        raw_data = raw_data[cutoff:(cutoff + seq_len)]
-                        # pad read data with zeros until max_seq_len
-                        raw_data = np.concatenate((raw_data, [0] * (max_seq_len - len(raw_data))), axis=None)
+                        # remove cutoff and keep signals up to longest maximum sequence length
+                        raw_data = raw_data[cutoff:(cutoff + longest_max_seq_len)]
 
                         reads.append(raw_data)
 
-                        # normalize if batch size should be used and is reached
-                        if (not use_single_batch) and (batch_idx % batch_size == 0) and (batch_idx != 0):
-                            normalize(reads, batch_idx, f'{outpath}/{ds}', ds, max_seq_len)
+                        # normalize if all files are processed (single batch) or batch size is reached
+                        all_files_processed = (file_idx == len(glob.glob(f'{outpath}/{ds_name}/*.fast5')) - 1
+                                               and read_idx == len(f5.get_read_ids()) - 1)
+                        if (use_single_batch and all_files_processed) \
+                                or (not use_single_batch and (batch_idx % batch_size == 0) and (batch_idx != 0)):
+                            reads = normalize(reads, longest_max_seq_len)
+
+                            for i in range(len(reads)):
+                                # apply maximum sequence length
+                                reads[i] = reads[i][:max_seq_len]
+
+                                # generate random suffix start between min and max sequence length (both inclusive)
+                                suffix_start = random_gen.integers(min_seq_len, max_seq_len + 1)
+
+                                # substitute suffix with zeros
+                                reads[i][suffix_start:len(reads[i])] = [0] * (len(reads[i]) - suffix_start)
+
+                            save_as_tensor(reads, f'{outpath}/{ds_name}', batch_idx, use_single_batch)
                             del reads
                             reads = list()
 
-        # normalize all reads together (if dataset size should be used as batch size)
-        if use_single_batch and not ds.endswith('test'):
-            normalize(reads, batch_idx, f'{outpath}/{ds}', ds, max_seq_len, use_single_batch)
-            del reads
-            reads = list()
-
-        print(f'Number of reads in dataset: {batch_idx}')
-        ids_file.close()
+        if not ds_name.endswith('test'):
+            print(f'Number of kept reads in dataset: {batch_idx}')
 
 
 if __name__ == '__main__':
