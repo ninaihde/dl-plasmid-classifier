@@ -117,9 +117,11 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
 @click.option('--cutoff', '-c', default=1000, help='cutoff the first c signals')
 @click.option('--min_seq_len', '-min', default=2000, help='minimum number of raw signals (after cutoff) used per read')
 @click.option('--max_seq_len', '-max', default=8000, help='maximum number of raw signals (after cutoff) used per read')
+@click.option('--cut_after', '-a', default=False,
+              help='whether random sequence length per read of validation set is applied before or after normalization')
 @click.option('--random_seed', '-s', default=42, help='seed for random operations')
 @click.option('--batch_size', '-b', default=10000, help='batch size, set to zero to use whole dataset size')
-def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, random_seed, batch_size):
+def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, cut_after, random_seed, batch_size):
     if not os.path.exists(outpath):
         os.makedirs(outpath)
 
@@ -150,6 +152,10 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
         if 'reads' in locals():
             del reads
         reads = list()
+
+        if 'seq_lengths' in locals():
+            del seq_lengths
+        seq_lengths = list()
 
         batch_idx = 0
 
@@ -184,8 +190,14 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
                     if len(raw_data) >= (cutoff + seq_len):
                         batch_idx += 1
 
-                        # remove cutoff and apply random sequence length
-                        raw_data = raw_data[cutoff:(cutoff + seq_len)]
+                        if cut_after and ds_name.endswith('val'):
+                            # only remove cutoff
+                            raw_data = raw_data[cutoff:]
+                            seq_lengths.append(seq_len)
+                        else:
+                            # remove cutoff and apply random sequence length
+                            raw_data = raw_data[cutoff:(cutoff + seq_len)]
+
                         reads.append(raw_data)
 
                         # normalize if all files are processed (single batch) or batch size is reached
@@ -194,12 +206,19 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
                                 or (not use_single_batch and (batch_idx % batch_size == 0) and (batch_idx != 0)):
                             reads = normalize(reads)
 
-                            # pad with zeros until maximum sequence length
-                            reads = [r + [0] * (max_seq_len - len(r)) for r in reads]
+                            for i in range(len(reads)):
+                                # apply random sequence length
+                                if cut_after and ds_name.endswith('val'):
+                                    reads[i] = reads[i][:seq_lengths[i]]
+
+                                # pad with zeros until maximum sequence length
+                                reads[i] += [0] * (max_seq_len - len(reads[i]))
 
                             save_as_tensor(reads, f'{outpath}/{ds_name}', batch_idx, use_single_batch)
                             del reads
                             reads = list()
+                            del seq_lengths
+                            seq_lengths = list()
 
         if not ds_name.endswith('test'):
             print(f'Number of kept reads in dataset: {batch_idx}')
