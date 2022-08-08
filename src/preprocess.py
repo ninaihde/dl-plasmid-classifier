@@ -72,27 +72,30 @@ def move_files(outpath, ds):
         print(f'Files of dataset {ds[1]} were already moved')
 
 
-def normalize(data, longest_max_seq_len):
-    data = np.array(data)
+def normalize(data):
+    extreme_signals = list()
 
-    # normalize using z-score with median absolute deviation
-    mad = stats.median_abs_deviation(data, axis=1, scale='normal')
-    m = np.median(data, axis=1)
-    data = ((data - np.expand_dims(m, axis=1)) * 1.0) / (1.4826 * np.expand_dims(mad, axis=1))
+    for r_i, read in enumerate(data):
+        # normalize using z-score with median absolute deviation
+        median = np.median(read)
+        mad = stats.median_abs_deviation(read, scale='normal')
+        data[r_i] = list((read - median) / (1.4826 * mad))
 
-    # replace extreme signals (modified absolute z-score larger than 3.5) with average of closest neighbors
-    # see Iglewicz and Hoaglin (https://hwbdocuments.env.nm.gov/Los%20Alamos%20National%20Labs/TA%2054/11587.pdf)
-    # x[0] indicates read and x[1] signal in read
-    x = np.where(np.abs(data) > 3.5)
-    for i in range(x[0].shape[0]):
-        if x[1][i] == 0:
-            data[x[0][i], x[1][i]] = data[x[0][i], x[1][i] + 1]
-        elif x[1][i] == (longest_max_seq_len - 1):
-            data[x[0][i], x[1][i]] = data[x[0][i], x[1][i] - 1]
+        # get extreme signals (modified absolute z-score larger than 3.5)
+        # see Iglewicz and Hoaglin (https://hwbdocuments.env.nm.gov/Los%20Alamos%20National%20Labs/TA%2054/11587.pdf)
+        extreme_signals += [(r_i, s_i) for s_i, signal_is_extreme in enumerate(np.abs(data[r_i]) > 3.5)
+                            if signal_is_extreme]
+
+    # replace extreme signals with average of closest neighbors
+    for read_idx, signal_idx in extreme_signals:
+        if signal_idx == 0:
+            data[read_idx][signal_idx] = data[read_idx][signal_idx + 1]
+        elif signal_idx == (len(data[read_idx]) - 1):
+            data[read_idx][signal_idx] = data[read_idx][signal_idx - 1]
         else:
-            data[x[0][i], x[1][i]] = (data[x[0][i], x[1][i] - 1] + data[x[0][i], x[1][i] + 1]) / 2
+            data[read_idx][signal_idx] = (data[read_idx][signal_idx - 1] + data[read_idx][signal_idx + 1]) / 2
 
-    return [list(r) for r in data]
+    return data
 
 
 def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
@@ -114,13 +117,9 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
 @click.option('--cutoff', '-c', default=1000, help='cutoff the first c signals')
 @click.option('--min_seq_len', '-min', default=2000, help='minimum number of raw signals (after cutoff) used per read')
 @click.option('--max_seq_len', '-max', default=8000, help='maximum number of raw signals (after cutoff) used per read')
-@click.option('--longest_max_seq_len', '-lmax', default=8000,
-              help='longest maximum number of raw signals (after cutoff) used per read in all compared runs. Set to '
-                   'max_seq_len if only one run will be executed.')
 @click.option('--random_seed', '-s', default=42, help='seed for random operations')
 @click.option('--batch_size', '-b', default=10000, help='batch size, set to zero to use whole dataset size')
-def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, longest_max_seq_len, random_seed,
-         batch_size):
+def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, random_seed, batch_size):
     if not os.path.exists(outpath):
         os.makedirs(outpath)
 
@@ -132,9 +131,6 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
                          'these percentages to allow for a valid testing percentage.')
     if min_seq_len >= max_seq_len:
         raise ValueError('The minimum sequence length must be smaller than the maximum sequence length!')
-    if max_seq_len > longest_max_seq_len:
-        raise ValueError('The maximum sequence length must be smaller than or equal to the longest maximum sequence '
-                         'length!')
 
     random_gen = random.default_rng(random_seed)
 
@@ -166,7 +162,8 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
             csv_writer = csv.writer(ids_file)
             csv_writer.writerow(['Read ID', 'GT Label'])
 
-        for file_idx, file in enumerate(glob.glob(f'{outpath}/{ds_name}/*.fast5')):
+        files = glob.glob(f'{outpath}/{ds_name}/*.fast5')
+        for file_idx, file in enumerate(files):
             print(f'File: {file}')
             label = re.split('[_.]+', file)[-2]
 
@@ -177,34 +174,28 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
                         csv_writer.writerow([read.read_id, label])
                         continue
 
-                    # get raw signals and convert to pA values
+                    # get raw signals converted to pA values
                     raw_data = read.get_raw_data(scale=True)
 
+                    # get random sequence length per read
+                    seq_len = random_gen.integers(min_seq_len, max_seq_len + 1)
+
                     # only parse reads that are long enough
-                    if len(raw_data) >= (cutoff + longest_max_seq_len):
+                    if len(raw_data) >= (cutoff + seq_len):
                         batch_idx += 1
 
-                        # remove cutoff and keep signals up to longest maximum sequence length
-                        raw_data = raw_data[cutoff:(cutoff + longest_max_seq_len)]
-
+                        # remove cutoff and apply random sequence length
+                        raw_data = raw_data[cutoff:(cutoff + seq_len)]
                         reads.append(raw_data)
 
                         # normalize if all files are processed (single batch) or batch size is reached
-                        all_files_processed = (file_idx == len(glob.glob(f'{outpath}/{ds_name}/*.fast5')) - 1
-                                               and read_idx == len(f5.get_read_ids()) - 1)
+                        all_files_processed = (file_idx == len(files) - 1 and read_idx == len(f5.get_read_ids()) - 1)
                         if (use_single_batch and all_files_processed) \
                                 or (not use_single_batch and (batch_idx % batch_size == 0) and (batch_idx != 0)):
-                            reads = normalize(reads, longest_max_seq_len)
+                            reads = normalize(reads)
 
-                            for i in range(len(reads)):
-                                # apply maximum sequence length
-                                reads[i] = reads[i][:max_seq_len]
-
-                                # generate random suffix start between min and max sequence length (both inclusive)
-                                suffix_start = random_gen.integers(min_seq_len, max_seq_len + 1)
-
-                                # substitute suffix with zeros
-                                reads[i][suffix_start:len(reads[i])] = [0] * (len(reads[i]) - suffix_start)
+                            # pad with zeros until maximum sequence length
+                            reads = [r + [0] * (max_seq_len - len(r)) for r in reads]
 
                             save_as_tensor(reads, f'{outpath}/{ds_name}', batch_idx, use_single_batch)
                             del reads
