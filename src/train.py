@@ -14,11 +14,11 @@ def validate(validation_generator, device, model, criterion):
     # set gradient calculation off
     with torch.set_grad_enabled(False):
         for val_data, val_labels in validation_generator:
-            val_data, val_labels = val_data.to(device), val_labels.to(device)
+            val_data, val_labels = val_data.to(device), val_labels.to(torch.long).to(device)
             outputs_val = model(val_data)
 
             loss_val = criterion(outputs_val, val_labels)
-            total_loss += loss_val
+            total_loss += loss_val.item()
 
             acc_val = 100.0 * (val_labels == outputs_val.max(dim=1).indices).float().mean().item()
             total_acc += acc_val
@@ -84,7 +84,7 @@ def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, batch, n
     best_model_epoch = 0
 
     # setup early stopping
-    last_loss = 100
+    last_loss = 1.0
     trigger_times = 0
 
     for epoch in range(n_epochs):
@@ -97,7 +97,7 @@ def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, batch, n
             outputs_train = model(train_data)
             loss_train = criterion(outputs_train, train_labels)
             acc_train = 100.0 * (train_labels == outputs_train.max(dim=1).indices).float().mean().item()
-            print(f'Batch: {str(i)}, training loss: {str(loss_train)}, training accuracy: {str(acc_train)}')
+            print(f'Batch: {str(i)}, training loss: {str(loss_train.item())}, training accuracy: {str(acc_train)}')
 
             # perform backward propagation
             # -> set gradients to zero (to avoid using combination of old and new gradient as new gradient)
@@ -111,7 +111,7 @@ def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, batch, n
         current_loss, current_acc = validate(validation_generator, device, model, criterion)
 
         # save each model
-        torch.save(model.state_dict(), f'{outpath}/model_{epoch}.pt')
+        torch.save(model.state_dict(), f'{outpath}/model_epoch{epoch}.pt')
         print(f'Validation loss: {str(current_loss)}, validation accuracy: {str(current_acc)}')
 
         # update best model
@@ -128,7 +128,7 @@ def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, batch, n
                   f'Best model reached after {str(best_model_epoch)} epochs')
             # return  # TODO: comment in again if early stopping criterion is optimized
 
-    print(f'Best model reaches after {str(best_model_epoch)} epochs')
+    print(f'Best model reached after {str(best_model_epoch)} epochs')
 
 
 if __name__ == '__main__':
