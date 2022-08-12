@@ -8,7 +8,7 @@ class Dataset(torch.utils.data.Dataset):
         p = torch.load(p_data)
         c = torch.load(chr_data)
         self.data = torch.cat((p, c))
-        self.label = torch.cat((torch.zeros(p.shape[0]), torch.ones(c.shape[0])))  # plasmids: 1, chromosomes: 0
+        self.label = torch.cat((torch.ones(p.shape[0]), torch.zeros(c.shape[0])))  # plasmids: 1, chromosomes: 0
 
     def __len__(self):
         return len(self.label)
