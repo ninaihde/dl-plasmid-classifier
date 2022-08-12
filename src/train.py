@@ -4,7 +4,6 @@ import os
 
 from dataset import Dataset
 from model import Bottleneck, ResNet
-from pytorch_lightning import Trainer, seed_everything
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -47,13 +46,11 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times, patience):
 @click.option('--interm', '-i', help='file path for model checkpoint (optional)', type=click.Path(exists=True),
               required=False)
 @click.option('--patience', '-p', default=2, help='patience (i.e., number of epochs) to wait before early stopping')
-@click.option('--random_seed', '-s', default=42, help='seed for random operations')
 @click.option('--batch', '-b', default=1000, help='batch size, default 1000 reads')
-@click.option('--n_workers', '-w', default=4, help='number of workers, default 4')
-@click.option('--n_epochs', '-e', default=20, help='number of epoches, default 20')
+@click.option('--n_workers', '-w', default=8, help='number of workers, default 8')
+@click.option('--n_epochs', '-e', default=5, help='number of epoches, default 5')
 @click.option('--learning_rate', '-l', default=1e-3, help='learning rate, default 1e-3')
-def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, random_seed, batch, n_workers, n_epochs,
-         learning_rate):
+def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, batch, n_workers, n_epochs, learning_rate):
     # set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Device: {device}')
@@ -84,7 +81,7 @@ def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, random_s
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     best_acc = 0
-    best_model = (None, 0)
+    best_model_epoch = 0
 
     # setup early stopping
     last_loss = 100
@@ -120,18 +117,18 @@ def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, random_s
         # update best model
         if best_acc < current_acc:
             best_acc = current_acc
-            best_model = (model, epoch)  # TODO: 'model' is not used
+            best_model_epoch = epoch
 
         # avoid overfitting with early stopping
         trigger_times = update_stopping_criterion(current_loss, last_loss, trigger_times, patience)
         last_loss = current_loss
 
         if trigger_times >= patience:
-            print(f'Training is early stopped!\n'
-                  f'Best model reached after {str(best_model[1])} epochs')
-            return
+            print(f'Training would be early stopped!\n'
+                  f'Best model reached after {str(best_model_epoch)} epochs')
+            # return  # TODO: comment in again if early stopping criterion is optimized
 
-    print(f'Best model reaches after {str(best_model[1])} epochs')
+    print(f'Best model reaches after {str(best_model_epoch)} epochs')
 
 
 if __name__ == '__main__':
