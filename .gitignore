@@ -130,4 +130,6 @@ dmypy.json
 
 .idea/
 data/
+logs/
+plots/
 sandbox.ipynb
