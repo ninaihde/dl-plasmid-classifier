@@ -168,8 +168,7 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
             csv_writer = csv.writer(ids_file)
             csv_writer.writerow(['Read ID', 'GT Label'])
 
-        files = glob.glob(f'{outpath}/{ds_name}/*.fast5')
-        for file_idx, file in enumerate(files):
+        for file_idx, file in enumerate(glob.glob(f'{outpath}/{ds_name}/*.fast5')):
             print(f'File: {file}')
             label = re.split('[_.]+', file)[-2]
 
@@ -200,10 +199,8 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
 
                         reads.append(raw_data)
 
-                        # normalize if all files are processed (single batch) or batch size is reached
-                        all_files_processed = (file_idx == len(files) - 1 and read_idx == len(f5.get_read_ids()) - 1)
-                        if (use_single_batch and all_files_processed) \
-                                or (not use_single_batch and (batch_idx % batch_size == 0) and (batch_idx != 0)):
+                        # normalize if batch size is reached
+                        if (not use_single_batch) and (batch_idx % batch_size == 0) and (batch_idx != 0):
                             reads = normalize(reads)
 
                             for i in range(len(reads)):
@@ -214,7 +211,7 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
                                 # pad with zeros until maximum sequence length
                                 reads[i] += [0] * (max_seq_len - len(reads[i]))
 
-                            save_as_tensor(reads, f'{outpath}/{ds_name}', batch_idx, use_single_batch)
+                            save_as_tensor(reads, f'{outpath}/{ds_name}', batch_idx)
                             del reads
                             reads = list()
                             del seq_lengths
@@ -222,6 +219,26 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
 
         if not ds_name.endswith('test'):
             print(f'Number of kept reads in dataset: {batch_idx}')
+
+            # normalize if single batch is used and all files are processed
+            if use_single_batch:
+                reads = normalize(reads)
+
+                for i in range(len(reads)):
+                    # apply random sequence length
+                    if cut_after and ds_name.endswith('val'):
+                        reads[i] = reads[i][:seq_lengths[i]]
+
+                    # pad with zeros until maximum sequence length
+                    reads[i] += [0] * (max_seq_len - len(reads[i]))
+
+                save_as_tensor(reads, f'{outpath}/{ds_name}', batch_idx, use_single_batch)
+                del reads
+                reads = list()
+                del seq_lengths
+                seq_lengths = list()
+
+    print('Finished.')
 
 
 if __name__ == '__main__':
