@@ -120,7 +120,7 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
 @click.option('--cut_after', '-a', default=False,
               help='whether random sequence length per read of validation set is applied before or after normalization')
 @click.option('--random_seed', '-s', default=42, help='seed for random operations')
-@click.option('--batch_size', '-b', default=10000, help='batch size, set to zero to use whole dataset size')
+@click.option('--batch_size', '-b', default=5000, help='batch size, set to zero to use whole dataset size')
 def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, cut_after, random_seed, batch_size):
     if not os.path.exists(outpath):
         os.makedirs(outpath)

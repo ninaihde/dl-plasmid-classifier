@@ -6,6 +6,7 @@ from dataset import Dataset
 from model import Bottleneck, ResNet
 from torch import nn
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 
 def validate(validation_generator, device, model, criterion):
@@ -42,21 +43,25 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times, patience):
 @click.option('--p_val', '-pv', help='path of plasmid validation set', type=click.Path(exists=True))
 @click.option('--chr_train', '-ct', help='path of chromosome training set', type=click.Path(exists=True))
 @click.option('--chr_val', '-cv', help='path of chromosome validation set', type=click.Path(exists=True))
-@click.option('--outpath', '-o', help='output path for models saved per epoch', type=click.Path())
+@click.option('--out_folder', '-o', help='output folder in which models and logs are saved', type=click.Path(exists=True))
 @click.option('--interm', '-i', help='file path for model checkpoint (optional)', type=click.Path(exists=True),
               required=False)
 @click.option('--patience', '-p', default=2, help='patience (i.e., number of epochs) to wait before early stopping')
 @click.option('--batch', '-b', default=1000, help='batch size, default 1000 reads')
 @click.option('--n_workers', '-w', default=8, help='number of workers, default 8')
-@click.option('--n_epochs', '-e', default=5, help='number of epoches, default 5')
+@click.option('--n_epochs', '-e', default=5, help='number of epochs, default 5')
 @click.option('--learning_rate', '-l', default=1e-3, help='learning rate, default 1e-3')
-def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, batch, n_workers, n_epochs, learning_rate):
+def main(p_train, p_val, chr_train, chr_val, out_folder, interm, patience, batch, n_workers, n_epochs, learning_rate):
     # set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Device: {device}')
 
-    if not os.path.exists(outpath):
-        os.makedirs(outpath)
+    if not os.path.exists(f'{out_folder}/models'):
+        os.makedirs(f'{out_folder}/models')
+    if not os.path.exists(f'{out_folder}/logs'):
+        os.makedirs(f'{out_folder}/logs')
+
+    logger = SummaryWriter(log_dir=f'{out_folder}/logs')
 
     # set parameters
     params = {'batch_size': batch,
@@ -98,6 +103,8 @@ def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, batch, n
             loss_train = criterion(outputs_train, train_labels)
             acc_train = 100.0 * (train_labels == outputs_train.max(dim=1).indices).float().mean().item()
             print(f'Batch: {str(i)}, training loss: {str(loss_train.item())}, training accuracy: {str(acc_train)}')
+            logger.add_scalar('train-loss', loss_train, i)
+            logger.add_scalar('train-acc', acc_train, i)
 
             # perform backward propagation
             # -> set gradients to zero (to avoid using combination of old and new gradient as new gradient)
@@ -111,8 +118,10 @@ def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, batch, n
         current_loss, current_acc = validate(validation_generator, device, model, criterion)
 
         # save each model
-        torch.save(model.state_dict(), f'{outpath}/model_epoch{epoch}.pt')
+        torch.save(model.state_dict(), f'{out_folder}/models/model_epoch{epoch}.pt')
         print(f'Validation loss: {str(current_loss)}, validation accuracy: {str(current_acc)}')
+        logger.add_scalar('val-loss', current_loss, epoch)
+        logger.add_scalar('val-acc', current_acc, epoch)
 
         # update best model
         if best_acc < current_acc:
@@ -125,9 +134,13 @@ def main(p_train, p_val, chr_train, chr_val, outpath, interm, patience, batch, n
 
         if trigger_times >= patience:
             print(f'Training would be early stopped!\n'
-                  f'Best model reached after {str(best_model_epoch)} epochs')
-            # return  # TODO: comment in again if early stopping criterion is optimized
+                  f'Best model would be reached after {str(best_model_epoch)} epochs')
+            # return  # TODO: comment in again if early stopping criterion is optimized & flush and close logger
 
+        # write all pending events to disk
+        logger.flush()
+
+    logger.close()
     print(f'Best model reached after {str(best_model_epoch)} epochs')
 
 
