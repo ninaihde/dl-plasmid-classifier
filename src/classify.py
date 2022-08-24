@@ -87,25 +87,27 @@ def main(model, inpath, outpath, seq_len, cut_after, batch_size, cutoff):
     reads = []
     read_ids = []
     batch_idx = 0
-    for file_idx, file in enumerate(glob.glob(inpath + '/*.fast5')):
+    for file in glob.glob(inpath + '/*.fast5'):
         # load pA signals and make all reads same-sized
         reads, read_ids = get_raw_data(file, reads, read_ids, cutoff, seq_len, cut_after)
 
-        if (file_idx + 1) % batch_size == 0:
-            print(f'[Step 1] Done loading data with batch {str(batch_idx)}, '
-                  f'Getting {str(len(reads))} of sequences')
-            reads = normalize(reads, batch_idx)
-            if cut_after:
-                reads = [r[:seq_len] for r in reads]
-            process(reads, read_ids, batch_idx, bmodel, outpath, device)
-            print(f'[Step 4] Done with batch {str(batch_idx)}\n')
-
-            del reads
-            reads = []
-            del read_ids
-            read_ids = []
-
+        # ensure that cutoff has not removed all reads
+        if len(reads) > 0:
             batch_idx += 1
+
+            if batch_idx % batch_size == 0:
+                print(f'[Step 1] Done loading data with batch {str(batch_idx)}, '
+                      f'Getting {str(len(reads))} of sequences')
+                reads = normalize(reads, batch_idx)
+                if cut_after:
+                    reads = [r[:seq_len] for r in reads]
+                process(reads, read_ids, batch_idx, bmodel, outpath, device)
+                print(f'[Step 4] Done with batch {str(batch_idx)}\n')
+
+                del reads
+                reads = []
+                del read_ids
+                read_ids = []
 
     print(f'[Step FINAL] --- {time.time() - start_time} seconds ---')
 

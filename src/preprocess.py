@@ -221,7 +221,7 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
             print(f'Number of kept reads in dataset: {batch_idx}')
 
             # normalize if single batch is used and all files are processed
-            if use_single_batch:
+            if use_single_batch and len(reads) > 0:
                 reads = normalize(reads)
 
                 for i in range(len(reads)):
