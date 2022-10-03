@@ -43,7 +43,7 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times, patience):
 @click.option('--p_val', '-pv', help='path of plasmid validation set', type=click.Path(exists=True))
 @click.option('--chr_train', '-ct', help='path of chromosome training set', type=click.Path(exists=True))
 @click.option('--chr_val', '-cv', help='path of chromosome validation set', type=click.Path(exists=True))
-@click.option('--out_folder', '-o', help='output folder in which models and logs are saved', type=click.Path(exists=True))
+@click.option('--out_folder', '-o', help='output folder in which models and logs are saved', type=click.Path())
 @click.option('--interm', '-i', help='file path for model checkpoint (optional)', type=click.Path(exists=True),
               required=False)
 @click.option('--patience', '-p', default=2, help='patience (i.e., number of epochs) to wait before early stopping')
@@ -56,11 +56,14 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, patience, batch
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Device: {device}')
 
+    if not os.path.exists(out_folder):
+        os.makedirs(out_folder)
     if not os.path.exists(f'{out_folder}/models'):
         os.makedirs(f'{out_folder}/models')
     if not os.path.exists(f'{out_folder}/logs'):
         os.makedirs(f'{out_folder}/logs')
 
+    # TODO: remove tensorboard's logger
     logger = SummaryWriter(log_dir=f'{out_folder}/logs')
 
     # set parameters
@@ -141,7 +144,7 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, patience, batch
         logger.flush()
 
     logger.close()
-    print(f'Best model reached after {str(best_model_epoch)} epochs')
+    print(f'Best model reached after epoch no. {str(best_model_epoch)}')
 
 
 if __name__ == '__main__':

@@ -15,6 +15,7 @@ def main(path):
             merged_tensors = torch.cat((merged_tensors, current_tensor))
 
         torch.save(merged_tensors, f'{path}/{ds}/{ds}_merged.pt')
+        print(f'Finished {ds}.')
 
 
 if __name__ == '__main__':

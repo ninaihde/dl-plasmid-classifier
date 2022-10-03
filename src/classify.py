@@ -18,15 +18,15 @@ def get_raw_data(file, reads, reads_ids, seq_lengths, cutoff, random_gen, min_se
             # get raw and scaled read
             raw_data = read.get_raw_data(scale=True)
 
-            if len(raw_data) >= (cutoff + seq_len):
-                # get random sequence length per read
-                seq_len = random_gen.integers(min_seq_len, max_seq_len + 1)
+            # get random sequence length per read
+            seq_len = random_gen.integers(min_seq_len, max_seq_len + 1)
 
-                seq_lengths.append(seq_len)
+            if len(raw_data) >= (cutoff + seq_len):
                 reads_ids.append(read.read_id)
 
                 if cut_after:
                     reads.append(raw_data[cutoff:])
+                    seq_lengths.append(seq_len)
                 else:
                     reads.append(raw_data[cutoff:(cutoff + seq_len)])
 
@@ -57,10 +57,13 @@ def normalize(data, batch_idx):
             data[read_idx][signal_idx] = (data[read_idx][signal_idx - 1] + data[read_idx][signal_idx + 1]) / 2
 
     print(f'[Step 2] Done data normalization with batch {str(batch_idx)}')
-    return torch.tensor(data).float()
+    return data
 
 
 def process(reads, read_ids, batch_idx, bmodel, outpath, device):
+    # convert to torch tensors
+    reads = torch.tensor(reads).float()
+
     with torch.no_grad():
         data = reads.to(device)
         outputs = bmodel(data)
@@ -119,7 +122,7 @@ def main(model, inpath, outpath, min_seq_len, max_seq_len, cut_after, batch_size
             batch_idx += 1
 
             if batch_idx % batch_size == 0:
-                print(f'[Step 1] Done loading data with batch {str(batch_idx)}, '
+                print(f'[Step 1] Done loading data until batch {str(batch_idx)}, '
                       f'Getting {str(len(reads))} of sequences')
 
                 reads = normalize(reads, batch_idx)
