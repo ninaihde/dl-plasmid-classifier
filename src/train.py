@@ -66,15 +66,12 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, patience, batch
     # TODO: remove tensorboard's logger
     logger = SummaryWriter(log_dir=f'{out_folder}/logs')
 
-    # set parameters
+    # load data
     params = {'batch_size': batch,
               'shuffle': True,
               'num_workers': n_workers}
-
-    # load files
     training_set = Dataset(p_train, chr_train)
     training_generator = DataLoader(training_set, **params)
-
     validation_set = Dataset(p_val, chr_val)
     validation_generator = DataLoader(validation_set, **params)
 
@@ -85,8 +82,13 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, patience, batch
     if interm is not None:
         model.load_state_dict(torch.load(interm))
 
-    criterion = nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    # use sample count per class for balancing the loss while training
+    # inspired by https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html
+    class_weights = [len(training_set) / (2 * class_count) for class_count in training_set.get_class_counts()]
+    class_weights = torch.tensor(class_weights, dtype=torch.float)
+    criterion = nn.CrossEntropyLoss(weight=class_weights).to(device)
 
     best_acc = 0
     best_model_epoch = 0
