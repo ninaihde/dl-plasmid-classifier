@@ -71,7 +71,7 @@ def process(reads, read_ids, batch_idx, bmodel, outpath, device):
             csv_writer = csv.writer(f)
             csv_writer.writerow(['Read ID', 'Predicted Label'])
             for read_id, label_nr in zip(read_ids, outputs.max(dim=1).indices.int().data.cpu().numpy()):
-                label = 'plasmid' if label_nr == 1 else 'chr'
+                label = 'plasmid' if label_nr == 0 else 'chr'
                 csv_writer.writerow([read_id, label])
         print(f'[Step 3] Done processing with batch {str(batch_idx)}')
         del outputs
