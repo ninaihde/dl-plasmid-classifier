@@ -98,7 +98,7 @@ def main(model, inpath, outpath, min_seq_len, max_seq_len, cut_after, batch_size
 
     # set device
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    print(f'Device: {device}')
+    print(f'Device: {device}\n')
 
     if not os.path.exists(outpath):
         os.makedirs(outpath)
