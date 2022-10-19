@@ -82,7 +82,7 @@ def process(reads, read_ids, batch_idx, bmodel, outpath, device):
 @click.option('--inpath', '-i', help='path to folder with input fast5 data', type=click.Path(exists=True))
 @click.option('--outpath', '-o', help='output result folder path', type=click.Path())
 @click.option('--min_seq_len', '-min', default=2000, help='minimum number of raw signals (after cutoff) used per read')
-@click.option('--max_seq_len', '-max', default=3000, help='maximum number of raw signals (after cutoff) used per read')
+@click.option('--max_seq_len', '-max', default=4000, help='maximum number of raw signals (after cutoff) used per read')
 @click.option('--cut_after', '-a', default=False,
               help='whether random sequence length per read is applied before or after normalization')
 @click.option('--batch_size', '-b', default=1, help='batch size')  # test data is sorted by time, so 1 should be representative
@@ -129,6 +129,7 @@ def main(model, inpath, outpath, min_seq_len, max_seq_len, cut_after, batch_size
 
                 for i, r in enumerate(reads):
                     if cut_after:
+                        # cut to random sequence length
                         reads[i] = reads[i][:seq_lengths[i]]
 
                     # pad with zeros until maximum sequence length

@@ -12,22 +12,29 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 
-def validate(validation_generator, device, model, val_criterion):
+def validate(out_folder, epoch, validation_generator, device, model, val_criterion):
+    label_df = pd.DataFrame(columns=['Read ID', 'Predicted Label'])
     totals = dict.fromkeys(['Validation Loss', 'Validation Accuracy', 'TN', 'FP', 'FN', 'TP', 'Balanced Accuracy',
                             'F1S', 'MCC', 'Precision', 'Recall'], 0)
 
     # set gradient calculation off
     with torch.set_grad_enabled(False):
-        for val_data, val_labels in validation_generator:
-            val_data, val_labels = val_data.to(device), val_labels.to(torch.long).to(device)
+        for val_data, val_labels, val_ids in validation_generator:
+            val_data, val_labels, val_ids = \
+                val_data.to(device), val_labels.to(torch.long).to(device), val_ids.to(device)
             val_outputs = model(val_data)
-
             val_loss = val_criterion(val_outputs, val_labels)
             totals['Validation Loss'] += val_loss.item()
 
+            # get and store predicted labels
+            predicted_labels = val_outputs.max(dim=1).indices.int().data.cpu().numpy()
+            for read_id, label_nr in zip(val_ids, predicted_labels):
+                label = 'plasmid' if label_nr == 0 else 'chr'
+                label_df = pd.concat([label_df, pd.DataFrame([{'Read ID': read_id, 'Predicted Label': label}])],
+                                     ignore_index=True)
+
             # calculate confusion matrix and performance metrics
             # TODO: reduce number of metrics once final metrics are chosen
-            predicted_labels = val_outputs.max(dim=1).indices.int().data.cpu().numpy()
             tn, fp, fn, tp = confusion_matrix(val_labels, predicted_labels, labels=[1, 0]).ravel()
             totals['TN'] += tn
             totals['FP'] += fp
@@ -40,6 +47,7 @@ def validate(validation_generator, device, model, val_criterion):
             totals['Precision'] += precision_score(val_labels, predicted_labels, pos_label=0)
             totals['Recall'] += recall_score(val_labels, predicted_labels, pos_label=0)
 
+    label_df.to_csv(f'{out_folder}/pred_labels/pred_labels_epoch{epoch}.csv', index=False)
     return {k: v / len(validation_generator) for k, v in totals.items()}
 
 
@@ -56,8 +64,10 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
 @click.command()
 @click.option('--p_train', '-pt', help='file path of plasmid training set', type=click.Path(exists=True))
 @click.option('--p_val', '-pv', help='file path of plasmid validation set', type=click.Path(exists=True))
+@click.option('--p_ids', '-pid', help='file path of plasmid validation read ids', type=click.Path(exists=True))
 @click.option('--chr_train', '-ct', help='file path of chromosome training set', type=click.Path(exists=True))
 @click.option('--chr_val', '-cv', help='file path of chromosome validation set', type=click.Path(exists=True))
+@click.option('--chr_ids', '-cid', help='file path of chromosome validation read ids', type=click.Path(exists=True))
 @click.option('--out_folder', '-o', help='output folder path in which logs and models are saved', type=click.Path())
 @click.option('--interm', '-i', help='file path of model checkpoint (optional)', type=click.Path(exists=True),
               required=False)
@@ -68,8 +78,8 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
 @click.option('--n_workers', '-w', default=8, help='number of workers, default 8')
 @click.option('--n_epochs', '-e', default=5, help='number of epochs, default 5')
 @click.option('--learning_rate', '-l', default=1e-3, help='learning rate, default 1e-3')
-def main(p_train, p_val, chr_train, chr_val, out_folder, interm, model_selection_criterion, patience, batch, n_workers,
-         n_epochs, learning_rate):
+def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm, model_selection_criterion, patience,
+         batch, n_workers, n_epochs, learning_rate):
     start_time = time.time()
 
     if model_selection_criterion not in ['loss', 'acc']:
@@ -83,6 +93,8 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, model_selection
         os.makedirs(out_folder)
     if not os.path.exists(f'{out_folder}/logs'):
         os.makedirs(f'{out_folder}/logs')
+    if not os.path.exists(f'{out_folder}/pred_labels'):
+        os.makedirs(f'{out_folder}/pred_labels')
     if not os.path.exists(f'{out_folder}/models'):
         os.makedirs(f'{out_folder}/models')
 
@@ -92,7 +104,7 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, model_selection
               'num_workers': n_workers}
     training_set = Dataset(p_train, chr_train)
     training_generator = DataLoader(training_set, **params)
-    validation_set = Dataset(p_val, chr_val)
+    validation_set = Dataset(p_val, chr_val, p_ids, chr_ids)
     validation_generator = DataLoader(validation_set, **params)
 
     print(f'Number of batches: {str(len(training_generator))}')
@@ -131,7 +143,7 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, model_selection
     for epoch in range(n_epochs):
         print(f'\nEpoch: {str(epoch)}')
 
-        for i, (train_data, train_labels) in enumerate(training_generator):
+        for i, (train_data, train_labels, _) in enumerate(training_generator):
             train_data, train_labels = train_data.to(device), train_labels.to(torch.long).to(device)
 
             # perform forward propagation
@@ -151,7 +163,7 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, model_selection
             optimizer.step()
 
         # validate
-        current_val_results = validate(validation_generator, device, model, val_criterion)
+        current_val_results = validate(out_folder, epoch, validation_generator, device, model, val_criterion)
         print(f'Validation Loss: {str(current_val_results["Validation Loss"])}, '
               f'Validation Accuracy: {str(current_val_results["Validation Loss"])}')
         current_val_results['Epoch'] = epoch

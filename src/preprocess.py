@@ -1,8 +1,8 @@
 import click
-import csv
 import glob
 import numpy as np
 import os
+import pandas as pd
 import re
 import shutil
 import torch
@@ -144,7 +144,7 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
         use_single_batch = True
 
     for ds_name in [x.split(os.path.sep)[-1] for x in glob.glob(f'{outpath}/*')
-                    if x.split('\\')[-1].startswith('prepared')]:
+                    if x.split(os.path.sep)[-1].startswith('prepared')]:
         print(f'\nDataset: {ds_name}')
 
         if 'reads' in locals():
@@ -157,14 +157,9 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
 
         batch_idx = 0
 
-        # create file for ground truth labels of test dataset
-        if ds_name.endswith('test'):
-            # ensure that already existing file is replaced
-            if os.path.isfile(f'{outpath}/gt_test_labels.csv'):
-                os.remove(f'{outpath}/gt_test_labels.csv')
-            ids_file = open(f'{outpath}/gt_test_labels.csv', 'w', newline='\n')
-            csv_writer = csv.writer(ids_file)
-            csv_writer.writerow(['Read ID', 'GT Label'])
+        # create file for ground truth labels of validation and test dataset
+        if ds_name.endswith('val') or ds_name.endswith('test'):
+            label_df = pd.DataFrame(columns=['Read ID', 'GT Label'])
 
         for file_idx, file in enumerate(glob.glob(f'{outpath}/{ds_name}/*.fast5')):
             print(f'File: {file}')
@@ -174,7 +169,9 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
                 for read_idx, read in enumerate(f5.get_reads()):
                     # store ground truth labels for test dataset
                     if ds_name.endswith('test'):
-                        csv_writer.writerow([read.read_id, label])
+                        label_df = pd.concat(
+                            [label_df, pd.DataFrame([{'Read ID': read.read_id, 'GT Label': label}])],
+                            ignore_index=True)
                         continue
 
                     # get raw signals converted to pA values
@@ -186,6 +183,11 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
                     # only parse reads that are long enough
                     if len(raw_data) >= (cutoff + seq_len):
                         batch_idx += 1
+
+                        if ds_name.endswith('val'):
+                            label_df = pd.concat(
+                                [label_df, pd.DataFrame([{'Read ID': read.read_id, 'GT Label': label}])],
+                                ignore_index=True)
 
                         if cut_after and ds_name.endswith('val'):
                             # only remove cutoff
@@ -235,6 +237,15 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
                 reads = list()
                 del seq_lengths
                 seq_lengths = list()
+
+        # store ground truth labels
+        if ds_name.endswith('test'):
+            label_df.to_csv(f'{outpath}/gt_test_labels.csv', index=False)
+        elif ds_name.endswith('val'):
+            label_df.to_csv(f'{outpath}/gt_{ds_name.split("_")[2]}_{ds_name.split("_")[1]}_labels.csv', index=False)
+            with open(f'{outpath}/{ds_name.split("_")[1]}_read_ids.txt', 'w') as f:
+                for r_id in label_df['Read ID'].tolist():
+                    f.write(f'{str(r_id)}\n')
 
     print('Finished.')
 
