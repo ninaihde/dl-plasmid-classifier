@@ -1,14 +1,14 @@
 import click
 import glob
+import os
 import torch
 
 
 @click.command()
 @click.option('--path', '-p', help='path to preprocessed tensors', type=click.Path(exists=True))
 def main(path):
-    # TODO: change '\\' to '/'
-    for ds in [x.split('\\')[-1] for x in glob.glob(f'{path}/*') if x.split('\\')[-1].startswith('prepared')
-                                                                    and not x.split('\\')[-1].endswith('test')]:
+    for ds in [x.split(os.path.sep)[-1] for x in glob.glob(f'{path}/*')
+               if x.split(os.path.sep)[-1].startswith('prepared') and not x.split(os.path.sep)[-1].endswith('test')]:
         merged_tensors = torch.Tensor()
         for tensor_file in glob.glob(f'{path}/{ds}/*.pt'):
             current_tensor = torch.load(tensor_file)

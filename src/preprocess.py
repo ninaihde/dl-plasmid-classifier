@@ -41,7 +41,7 @@ def split(paths, train_percentage, val_percentage, random_gen):
     val = random_gen.choice([p for p in paths if p not in train], size=int(len(paths) * val_percentage), replace=False)
 
     # catch if dataset splitting percentages created empty folder
-    label = paths[0].split('\\')[-2].split('_')[0]  # TODO: change '\\' to '/'
+    label = paths[0].split(os.path.sep)[-2].split('_')[0]
     if len(train) == 0:
         raise ValueError(f'No fast5 files selected for dataset {label}_train! Please adjust the splitting percentages.')
     if len(val) == 0:
@@ -57,8 +57,6 @@ def move_files(outpath, ds):
         os.makedirs(folder_path)
 
         for file_path in ds[0]:
-            file_path = file_path.replace('\\', '/')  # TODO: remove line
-
             # add suffix to avoid overwriting files and to store labels for test data -> runname__batchname__label
             file_path_splitted = re.split('[/.]+', file_path)
             unique_filename = f'{file_path_splitted[-4]}' \
@@ -145,8 +143,8 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
     if batch_size == 0:
         use_single_batch = True
 
-    # TODO: change '\\' to '/'
-    for ds_name in [x.split('\\')[-1] for x in glob.glob(f'{outpath}/*') if x.split('\\')[-1].startswith('prepared')]:
+    for ds_name in [x.split(os.path.sep)[-1] for x in glob.glob(f'{outpath}/*')
+                    if x.split('\\')[-1].startswith('prepared')]:
         print(f'\nDataset: {ds_name}')
 
         if 'reads' in locals():

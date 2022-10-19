@@ -1,7 +1,8 @@
 import click
+import os
+import pandas as pd
 import time
 import torch
-import os
 
 from dataset import Dataset
 from model import Bottleneck, ResNet
@@ -11,8 +12,8 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 
-def validate(validation_generator, device, model, criterion):
-    totals = dict.fromkeys(['Validation Loss', 'TN', 'FP', 'FN', 'TP', 'Validation Accuracy', 'Balanced Accuracy',
+def validate(validation_generator, device, model, val_criterion):
+    totals = dict.fromkeys(['Validation Loss', 'Validation Accuracy', 'TN', 'FP', 'FN', 'TP', 'Balanced Accuracy',
                             'F1S', 'MCC', 'Precision', 'Recall'], 0)
 
     # set gradient calculation off
@@ -21,18 +22,17 @@ def validate(validation_generator, device, model, criterion):
             val_data, val_labels = val_data.to(device), val_labels.to(torch.long).to(device)
             val_outputs = model(val_data)
 
-            val_loss = criterion(val_outputs, val_labels)
+            val_loss = val_criterion(val_outputs, val_labels)
             totals['Validation Loss'] += val_loss.item()
 
             # calculate confusion matrix and performance metrics
-            # TODO: once final metric is chosen, reduce number of calculated metrics
+            # TODO: reduce number of metrics once final metrics are chosen
             predicted_labels = val_outputs.max(dim=1).indices.int().data.cpu().numpy()
             tn, fp, fn, tp = confusion_matrix(val_labels, predicted_labels, labels=[1, 0]).ravel()
             totals['TN'] += tn
             totals['FP'] += fp
             totals['FN'] += fn
             totals['TP'] += tp
-
             totals['Validation Accuracy'] += accuracy_score(val_labels, predicted_labels)
             totals['Balanced Accuracy'] += balanced_accuracy_score(val_labels, predicted_labels)
             totals['F1S'] += f1_score(val_labels, predicted_labels, pos_label=0)
@@ -58,7 +58,7 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
 @click.option('--p_val', '-pv', help='file path of plasmid validation set', type=click.Path(exists=True))
 @click.option('--chr_train', '-ct', help='file path of chromosome training set', type=click.Path(exists=True))
 @click.option('--chr_val', '-cv', help='file path of chromosome validation set', type=click.Path(exists=True))
-@click.option('--out_folder', '-o', help='output folder path in which models are saved', type=click.Path())
+@click.option('--out_folder', '-o', help='output folder path in which logs and models are saved', type=click.Path())
 @click.option('--interm', '-i', help='file path of model checkpoint (optional)', type=click.Path(exists=True),
               required=False)
 @click.option('--model_selection_criterion', '-s', default='loss', type=click.Choice(['loss', 'acc']),
@@ -81,6 +81,10 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, model_selection
 
     if not os.path.exists(out_folder):
         os.makedirs(out_folder)
+    if not os.path.exists(f'{out_folder}/logs'):
+        os.makedirs(f'{out_folder}/logs')
+    if not os.path.exists(f'{out_folder}/models'):
+        os.makedirs(f'{out_folder}/models')
 
     # load data
     params = {'batch_size': batch,
@@ -102,9 +106,13 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, model_selection
 
     # use sample count per class for balancing the loss while training
     # inspired by https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html
-    class_weights = [len(training_set) / (2 * class_count) for class_count in training_set.get_class_counts()]
-    class_weights = torch.tensor(class_weights, dtype=torch.float)
-    criterion = nn.CrossEntropyLoss(weight=class_weights).to(device)
+    train_class_weights = [len(training_set) / (2 * class_count) for class_count in training_set.get_class_counts()]
+    train_class_weights = torch.tensor(train_class_weights, dtype=torch.float)
+    train_criterion = nn.CrossEntropyLoss(weight=train_class_weights).to(device)
+
+    val_class_weights = [len(validation_set) / (2 * class_count) for class_count in validation_set.get_class_counts()]
+    val_class_weights = torch.tensor(val_class_weights, dtype=torch.float)
+    val_criterion = nn.CrossEntropyLoss(weight=val_class_weights).to(device)
 
     # setup best model consisting of epoch and metric (acc/ loss)
     if model_selection_criterion == 'acc':
@@ -116,6 +124,10 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, model_selection
     last_loss = 1.0
     trigger_times = 0
 
+    train_results = pd.DataFrame(columns=['Epoch', 'Batch', 'Training Loss', 'Training Accuracy'])
+    val_results = pd.DataFrame(columns=['Epoch', 'Validation Loss', 'Validation Accuracy', 'TN', 'FP', 'FN', 'TP',
+                                        'Balanced Accuracy', 'F1S', 'MCC', 'Precision', 'Recall'])
+
     for epoch in range(n_epochs):
         print(f'\nEpoch: {str(epoch)}')
 
@@ -124,9 +136,11 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, model_selection
 
             # perform forward propagation
             outputs_train = model(train_data)
-            train_loss = criterion(outputs_train, train_labels)
+            train_loss = train_criterion(outputs_train, train_labels)
             train_acc = 100.0 * (train_labels == outputs_train.max(dim=1).indices).float().mean().item()
-            print(f'Batch: {str(i)}, Training Loss: {str(train_loss.item())}, Training Accuracy: {str(train_acc)}')
+            train_results = pd.concat(
+                [train_results, pd.DataFrame([{'Epoch': epoch, 'Batch': i, 'Training Loss': train_loss.item(),
+                                               'Training Accuracy': train_acc}])], ignore_index=True)
 
             # perform backward propagation
             # -> set gradients to zero (to avoid using combination of old and new gradient as new gradient)
@@ -136,32 +150,37 @@ def main(p_train, p_val, chr_train, chr_val, out_folder, interm, model_selection
             # -> update parameters of optimizer
             optimizer.step()
 
-        # validate and log results
-        val_results = validate(validation_generator, device, model, criterion)
-        print(f'Validation: {val_results}')
+        # validate
+        current_val_results = validate(validation_generator, device, model, val_criterion)
+        print(f'Validation Loss: {str(current_val_results["Validation Loss"])}, '
+              f'Validation Accuracy: {str(current_val_results["Validation Loss"])}')
+        current_val_results['Epoch'] = epoch
+        val_results = pd.concat([val_results, pd.DataFrame([current_val_results])], ignore_index=True)
 
-        # save each model
-        torch.save(model.state_dict(), f'{out_folder}/model_epoch{epoch}.pt')
+        # save logs and model per epoch
+        train_results.to_csv(f'{out_folder}/logs/train_results_epoch{epoch}.csv', index=False)
+        val_results.to_csv(f'{out_folder}/logs/val_results_epoch{epoch}.csv', index=False)
+        torch.save(model.state_dict(), f'{out_folder}/models/model_epoch{epoch}.pt')
 
         # update best model
         if model_selection_criterion == 'acc':
-            if best_model[1] < val_results['Validation Accuracy']:
-                best_model = (epoch, val_results['Validation Accuracy'])
+            if best_model[1] < current_val_results['Validation Accuracy']:
+                best_model = (epoch, current_val_results['Validation Accuracy'])
         else:
-            if best_model[1] > val_results['Validation Loss']:
-                best_model = (epoch, val_results['Validation Loss'])
+            if best_model[1] > current_val_results['Validation Loss']:
+                best_model = (epoch, current_val_results['Validation Loss'])
 
         # avoid overfitting with early stopping
-        trigger_times = update_stopping_criterion(val_results['Validation Loss'], last_loss, trigger_times)
-        last_loss = val_results['Validation Loss']
+        trigger_times = update_stopping_criterion(current_val_results['Validation Loss'], last_loss, trigger_times)
+        last_loss = current_val_results['Validation Loss']
 
         if trigger_times >= patience:
             print(f'Training would be early stopped!\n'
-                  f'Best model would be reached after {str(best_model[0])} epochs '
-                  f'with runtime of {time.time() - start_time} seconds')
+                  f'Best model would be reached after {str(best_model[0])} epochs\n'
+                  f'Runtime: {time.time() - start_time} seconds')
             # return  # TODO: comment in again if early stopping criterion is optimized
 
-    print(f'Best model reached after epoch no. {str(best_model[0])}\n '
+    print(f'Best model reached after epoch no. {str(best_model[0])}\n'
           f'Runtime: {time.time() - start_time} seconds')
 
 
