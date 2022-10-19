@@ -3,8 +3,8 @@ import glob
 import os
 import pandas as pd
 
-from plot_helper import create_lineplot_for_single_metric, create_lineplot_for_single_metric_twice, \
-    create_barplot_for_several_metrics
+from plot_helper import create_barplot_for_several_metrics, create_lineplot_for_single_metric, \
+    create_lineplot_for_single_metric_twice, create_lineplot_per_max
 
 
 @click.command()
@@ -56,8 +56,7 @@ def main(input_path, output_path, prefix, run_id, model_selection_criterion):
 
             # plot validation metrics over time
             for metric in ['Balanced Accuracy', 'F1S', 'MCC', 'Precision', 'Recall', 'TNR', 'FPR', 'FNR']:
-                create_lineplot_for_single_metric(val_results, metric, max_seq_len, cutting_method, n_epochs, plots_dir,
-                                                  'val')
+                create_lineplot_for_single_metric(val_results, metric, max_seq_len, cutting_method, n_epochs, plots_dir)
 
             # prepare dataframe with training logs for merging
             train_results.columns = train_results.columns.str.lstrip('Training ')
@@ -85,9 +84,13 @@ def main(input_path, output_path, prefix, run_id, model_selection_criterion):
                         + '_ep' + best_models['Number of Epochs'].astype(str)
     best_models.to_csv(f'{res_dir}/validation_results_{run_id}.csv', index=False)
 
-    # create plots with 4 subplots each, each subplot showing the results of the best models with respect to one metric
+    # create plots with 4 subplots each, each subplot showing the best models with respect to one metric
     metric_groups = [['Balanced Accuracy', 'Precision', 'MCC', 'F1S'], ['Recall', 'TNR', 'FPR', 'FNR']]
     create_barplot_for_several_metrics(best_models, metric_groups, plots_dir, 'val')
+
+    # plot metrics per maximum sequence length
+    for metric in ['Balanced Accuracy', 'Accuracy', 'F1S', 'Precision', 'Recall', 'FPR', 'TNR', 'FNR', 'MCC']:
+        create_lineplot_per_max(best_models, metric, plots_dir, 'val')
 
     print('Finished.')
 

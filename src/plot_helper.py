@@ -2,10 +2,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def create_lineplot_for_single_metric_twice(merged, measure, mx, cut, epochs, plots_dir):
-    plotdata = merged.copy()
+def create_lineplot_for_single_metric_twice(data, measure, mx, cut, epochs, plots_dir):
     fig, ax = plt.subplots(figsize=(16, 8))
-    sns.lineplot(data=plotdata,
+    sns.lineplot(data=data,
                  x='Batch_cont',
                  y=measure,
                  hue='TYPE')
@@ -15,8 +14,8 @@ def create_lineplot_for_single_metric_twice(merged, measure, mx, cut, epochs, pl
               f'cutted: {cut.lower()} normalization, epochs: {epochs})', fontsize=22)
     plt.xlabel('Epoch', fontsize=18)
     plt.ylabel(measure, fontsize=18)
-    ax.set_xticks(plotdata[plotdata['TYPE'] == 'Validation']['Batch_cont'].tolist(),
-                  plotdata['Epoch'].astype(int).unique(), fontsize=14)
+    ax.set_xticks(data[data['TYPE'] == 'Validation']['Batch_cont'].tolist(),
+                  data['Epoch'].astype(int).unique(), fontsize=14)
     plt.yticks(fontsize=14)
     plt.rcParams['legend.title_fontsize'] = 14
     ax.legend(title=f'{measure} of', fontsize=14, loc='upper left', bbox_to_anchor=(1, 1))
@@ -28,10 +27,9 @@ def create_lineplot_for_single_metric_twice(merged, measure, mx, cut, epochs, pl
     plt.close()
 
 
-def create_lineplot_for_single_metric(data, measure, mx, cut, epochs, plots_dir, type_id):
-    plotdata = data.copy()
+def create_lineplot_for_single_metric(data, measure, mx, cut, epochs, plots_dir):
     fig, ax = plt.subplots(figsize=(16, 8))
-    sns.lineplot(data=plotdata,
+    sns.lineplot(data=data,
                  x='Epoch',
                  y=measure,
                  hue='TYPE')
@@ -48,7 +46,7 @@ def create_lineplot_for_single_metric(data, measure, mx, cut, epochs, plots_dir,
 
     ax.set(xlim=(0, (epochs - 1)))
     plt.tight_layout()
-    plt.savefig(f'{plots_dir}/max{mx}_cut{cut}_epochs{epochs}_{measure.lower()}_over_time_{type_id}.png', dpi=300,
+    plt.savefig(f'{plots_dir}/max{mx}_cut{cut}_epochs{epochs}_{measure.lower()}_over_time.png', dpi=300,
                 facecolor='white', edgecolor='none')
     plt.close()
 
@@ -57,8 +55,8 @@ def create_barplot_for_several_metrics(data, metric_collections, plots_dir, type
     plotdata = data.copy()
     plotdata = plotdata.replace(['cutAfter_', 'cutBefore_'], ['', ''], regex=True)
 
-    # plot 4 metrics at once for better comparability
     for metric_collection in metric_collections:
+        # plot 4 metrics (2 x 2) at once
         fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(22, 16), sharey=True)
         plt.rcParams['legend.title_fontsize'] = 14
         ax = axes.flatten()
@@ -94,28 +92,26 @@ def create_barplot_for_several_metrics(data, metric_collections, plots_dir, type
         plt.close()
 
 
-def plot_runtimes(runtimes, plots_dir):
+def create_lineplot_per_max(data, metric, plots_dir, type_id):
+    plotdata = data.copy()
     fig, ax = plt.subplots(figsize=(10, 8))
-    sns.lineplot(data=runtimes,
+    sns.lineplot(data=plotdata,
                  x='Maximum Sequence Length',
-                 y='Runtime (min)',
+                 y=metric,
                  hue='Cutting Method',
                  style='Number of Epochs')
 
-    # place y-values above bars
-    for i in ax.containers:
-        ax.bar_label(i, fmt='%.4f')
-
     # adjust text
-    plt.title(f'Runtimes of Plasmid Classifications', fontsize=22)
-    ax.set(ylim=(0, runtimes['Runtime (min)'].max() + 1))
-    plt.xlabel('Maximum Sequence Length (k)', fontsize=18)
-    plt.ylabel('Runtime (min)', fontsize=18)
-    plt.xticks(fontsize=14)
+    plt.title(f'{metric.split(" ")[0]} per Maximum Sequence Length', fontsize=22)  # remove unit in case of runtime
+    plt.xlabel('Maximum Sequence Length', fontsize=18)
+    plt.ylabel(metric, fontsize=18)
+    plt.xticks(fontsize=14, ticks=plotdata['Maximum Sequence Length'],
+               labels=plotdata['Maximum Sequence Length'].astype(str) + '000')  # spell out numbers
+    plt.locator_params(axis='x', nbins=plotdata['Maximum Sequence Length'].nunique())
     plt.yticks(fontsize=14)
     plt.rcParams['legend.title_fontsize'] = 14
     ax.legend(fontsize=14, loc='upper left', bbox_to_anchor=(1, 1))
 
     plt.tight_layout()
-    plt.savefig(f'{plots_dir}/runtimes.png', dpi=300, facecolor='white')
+    plt.savefig(f'{plots_dir}/{metric.split(" ")[0]}_per_max_{type_id}.png', dpi=300, facecolor='white')
     plt.close()

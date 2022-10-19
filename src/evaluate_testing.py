@@ -3,7 +3,7 @@ import glob
 import os
 import pandas as pd
 
-from plot_helper import create_barplot_for_several_metrics, plot_runtimes
+from plot_helper import create_barplot_for_several_metrics, create_lineplot_per_max
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, matthews_corrcoef, precision_score, \
     recall_score
 
@@ -76,22 +76,26 @@ def main(input_data, input_logs, output_path, prefix, run_id, model_selection_cr
                     + '_ep' + metrics['Number of Epochs'].astype(str)
     metrics.to_csv(f'{res_dir}/testing_results_{run_id}.csv', index=False)
 
-    # plot testing metrics over time
+    # create plots with 4 subplots each, each subplot showing the testing results with respect to one metric
     metric_groups = [['Balanced Accuracy', 'Precision', 'MCC', 'F1S'], ['Recall', 'TNR', 'FPR', 'FNR']]
     create_barplot_for_several_metrics(metrics, metric_groups, plots_dir, 'test')
 
-    # extract and plot runtimes from .txt testing log files
+    # plot metrics per maximum sequence length
+    for metric in ['Balanced Accuracy', 'Accuracy', 'F1S', 'Precision', 'Recall', 'FPR', 'TNR', 'FNR', 'MCC']:
+        create_lineplot_per_max(metrics, metric, plots_dir, 'test')
+
+    # extract and plot runtimes
     runtimes = pd.DataFrame(columns=['Maximum Sequence Length', 'Cutting Method', 'Number of Epochs', 'Runtime (min)'])
     for filepath in glob.glob(f'{input_logs}/classify_*_{run_id}.txt'):
         last_line = open(filepath, 'r').readlines()[-1]
         filename_splitted = os.path.basename(filepath).split('_')
-        runtimes = pd.concat([runtimes,
-                              pd.DataFrame([{'Maximum Sequence Length': filename_splitted[1][-1],
-                                             'Cutting Method': filename_splitted[2][3:],
-                                             'Number of Epochs': filename_splitted[3][:-10],
-                                             'Runtime (min)': float(last_line.split(' ')[3]) / 60}])],
-                             ignore_index=True)
-    plot_runtimes(runtimes, plots_dir)
+        runtimes = pd.concat(
+            [runtimes, pd.DataFrame([{'Maximum Sequence Length': int(filename_splitted[1].replace('max', '')),
+                                      'Cutting Method': filename_splitted[2].replace('cut', ''),
+                                      'Number of Epochs': int(filename_splitted[3].replace('epochs', '')),
+                                      'Runtime (min)': float(last_line.split(' ')[3]) / 60}])],
+            ignore_index=True)
+    create_lineplot_per_max(runtimes, 'Runtime (min)', plots_dir, 'test')
 
     print('Finished.')
 
