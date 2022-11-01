@@ -4,13 +4,12 @@ from torch import nn
 
 
 def conv3(in_channel, out_channel, stride=1, padding=1, groups=1):
-    return nn.Conv1d(in_channel, out_channel, kernel_size=3, stride=stride,
-                     padding=padding, bias=False, dilation=padding, groups=groups)
+    return nn.Conv1d(in_channel, out_channel, kernel_size=3, stride=stride, padding=padding, bias=False,
+                     dilation=padding, groups=groups)
 
 
 def conv1(in_channel, out_channel, stride=1, padding=0):
-    return nn.Conv1d(in_channel, out_channel, kernel_size=1, stride=stride,
-                     padding=padding, bias=False)
+    return nn.Conv1d(in_channel, out_channel, kernel_size=1, stride=stride, padding=padding, bias=False)
 
 
 def bcnorm(channel):
@@ -56,7 +55,7 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes=2):
+    def __init__(self, block, layers):
         super(ResNet, self).__init__()
         self.chan1 = 20
 

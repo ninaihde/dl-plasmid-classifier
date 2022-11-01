@@ -11,22 +11,17 @@ from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, m
 @click.command()
 @click.option('--input_data', '-d', help='path to root folder containing data', type=click.Path(exists=True))
 @click.option('--input_logs', '-l', help='path to folder with .txt logs/ all prints', type=click.Path(exists=True))
-@click.option('--output_path', '-o', help='path to folder where subfolder for created plots of run ID are to be stored',
+@click.option('--output_plots', '-op', help='path to folder where subfolder for created plots of run ID will be stored',
+              type=click.Path(exists=True))
+@click.option('--output_results', '-or', help='path to folder where calculated results will be stored',
               type=click.Path(exists=True))
 @click.option('--prefix', '-p', help='prefix of data folders to evaluate', default='prototype')
 @click.option('--run_id', '-r', help='identifier of runs to be evaluated', required=True)  # e.g. 'balancedLoss'
-@click.option('--model_selection_criterion', '-s', default='Loss', type=click.Choice(['Loss', 'Accuracy']),
-              help='model selection criterion, choose between validation loss and accuracy')
-def main(input_data, input_logs, output_path, prefix, run_id, model_selection_criterion):
+def main(input_data, input_logs, output_plots, output_results, prefix, run_id):
     # create subdirectory for plots to be generated
-    plots_dir = f'{output_path}/{run_id}'
+    plots_dir = f'{output_plots}/{run_id}'
     if not os.path.exists(plots_dir):
         os.makedirs(plots_dir)
-
-    # create subdirectory for testing results/ metrics
-    res_dir = f'{input_data}/results'
-    if not os.path.exists(res_dir):
-        os.makedirs(res_dir)
 
     metrics = pd.DataFrame(
         columns=['Maximum Sequence Length', 'Cutting Method', 'Number of Epochs', 'TP', 'TN', 'FP', 'FN',
@@ -67,14 +62,17 @@ def main(input_data, input_logs, output_path, prefix, run_id, model_selection_cr
                 'MCC': matthews_corrcoef(merged['GT Label'], merged['Predicted Label']),
             }])], ignore_index=True)
 
+            # store merged dataframe for analysis of FN and FP
+            merged.to_csv(f'{test_folder}gt_and_pred_labels.csv', index=False)
+
     # add missing metrics and store testing results
     metrics['TNR'] = metrics['TN'] / (metrics['TN'] + metrics['FP'])  # specificity
     metrics['FPR'] = metrics['FP'] / (metrics['FP'] + metrics['TN'])  # 1 - specificity
     metrics['FNR'] = metrics['FN'] / (metrics['FN'] + metrics['TP'])
-    metrics['ID'] = 'max' + metrics['Maximum Sequence Length'].astype(str) \
+    metrics['ID'] = 'max' + metrics['Maximum Sequence Length'].astype(int).astype(str) \
                     + '_cut' + metrics['Cutting Method'] \
                     + '_ep' + metrics['Number of Epochs'].astype(str)
-    metrics.to_csv(f'{res_dir}/testing_results_{run_id}.csv', index=False)
+    metrics.to_csv(f'{output_results}/testing_results_{run_id}.csv', index=False)
 
     # create plots with 4 subplots each, each subplot showing the testing results with respect to one metric
     metric_groups = [['Balanced Accuracy', 'Precision', 'MCC', 'F1S'], ['Recall', 'TNR', 'FPR', 'FNR']]
@@ -89,12 +87,12 @@ def main(input_data, input_logs, output_path, prefix, run_id, model_selection_cr
     for filepath in glob.glob(f'{input_logs}/classify_*_{run_id}.txt'):
         last_line = open(filepath, 'r').readlines()[-1]
         filename_splitted = os.path.basename(filepath).split('_')
-        runtimes = pd.concat(
-            [runtimes, pd.DataFrame([{'Maximum Sequence Length': int(filename_splitted[1].replace('max', '')),
-                                      'Cutting Method': filename_splitted[2].replace('cut', ''),
-                                      'Number of Epochs': int(filename_splitted[3].replace('epochs', '')),
-                                      'Runtime (min)': float(last_line.split(' ')[3]) / 60}])],
-            ignore_index=True)
+        runtimes = pd.concat([runtimes,
+                              pd.DataFrame([{'Maximum Sequence Length': int(filename_splitted[1].replace('max', '')),
+                                             'Cutting Method': filename_splitted[2].replace('cut', ''),
+                                             'Number of Epochs': int(filename_splitted[3].replace('epochs', '')),
+                                             'Runtime (min)': float(last_line.split(' ')[3]) / 60}])],
+                             ignore_index=True)
     create_lineplot_per_max(runtimes, 'Runtime (min)', plots_dir, 'test')
 
     print('Finished.')

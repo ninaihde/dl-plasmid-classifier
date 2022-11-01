@@ -20,8 +20,7 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
     # set gradient calculation off
     with torch.set_grad_enabled(False):
         for val_data, val_labels, val_ids in validation_generator:
-            val_data, val_labels, val_ids = \
-                val_data.to(device), val_labels.to(torch.long).to(device), val_ids.to(device)
+            val_data, val_labels = val_data.to(device), val_labels.to(torch.long).to(device)
             val_outputs = model(val_data)
             val_loss = val_criterion(val_outputs, val_labels)
             totals['Validation Loss'] += val_loss.item()
@@ -35,6 +34,7 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
 
             # calculate confusion matrix and performance metrics
             # TODO: reduce number of metrics once final metrics are chosen
+            val_labels = val_labels.cpu().numpy()
             tn, fp, fn, tp = confusion_matrix(val_labels, predicted_labels, labels=[1, 0]).ravel()
             totals['TN'] += tn
             totals['FP'] += fp
@@ -81,9 +81,6 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
 def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm, model_selection_criterion, patience,
          batch, n_workers, n_epochs, learning_rate):
     start_time = time.time()
-
-    if model_selection_criterion not in ['loss', 'acc']:
-        raise ValueError('Model selection criterion (-s) must be "loss" or "acc"!')
 
     # set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -143,13 +140,13 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
     for epoch in range(n_epochs):
         print(f'\nEpoch: {str(epoch)}')
 
-        for i, (train_data, train_labels, _) in enumerate(training_generator):
+        for i, (train_data, train_labels) in enumerate(training_generator):
             train_data, train_labels = train_data.to(device), train_labels.to(torch.long).to(device)
 
             # perform forward propagation
             outputs_train = model(train_data)
             train_loss = train_criterion(outputs_train, train_labels)
-            train_acc = 100.0 * (train_labels == outputs_train.max(dim=1).indices).float().mean().item()
+            train_acc = (train_labels == outputs_train.max(dim=1).indices).float().mean().item()
             train_results = pd.concat(
                 [train_results, pd.DataFrame([{'Epoch': epoch, 'Batch': i, 'Training Loss': train_loss.item(),
                                                'Training Accuracy': train_acc}])], ignore_index=True)
@@ -187,12 +184,12 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
         last_loss = current_val_results['Validation Loss']
 
         if trigger_times >= patience:
-            print(f'Training would be early stopped!\n'
+            print(f'\nTraining would be early stopped!\n'
                   f'Best model would be reached after {str(best_model[0])} epochs\n'
                   f'Runtime: {time.time() - start_time} seconds')
             # return  # TODO: comment in again if early stopping criterion is optimized
 
-    print(f'Best model reached after epoch no. {str(best_model[0])}\n'
+    print(f'\nBest model reached after epoch no. {str(best_model[0])}\n'
           f'Runtime: {time.time() - start_time} seconds')
 
 

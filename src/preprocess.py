@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import re
 import shutil
+import time
 import torch
 
 from numpy import random
@@ -120,6 +121,8 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
 @click.option('--random_seed', '-s', default=42, help='seed for random operations')
 @click.option('--batch_size', '-b', default=5000, help='batch size, set to zero to use whole dataset size')
 def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, cut_after, random_seed, batch_size):
+    start_time = time.time()
+
     if not os.path.exists(outpath):
         os.makedirs(outpath)
 
@@ -243,11 +246,11 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
             label_df.to_csv(f'{outpath}/gt_test_labels.csv', index=False)
         elif ds_name.endswith('val'):
             label_df.to_csv(f'{outpath}/gt_{ds_name.split("_")[2]}_{ds_name.split("_")[1]}_labels.csv', index=False)
-            with open(f'{outpath}/{ds_name.split("_")[1]}_read_ids.txt', 'w') as f:
+            with open(f'{outpath}/val_{ds_name.split("_")[1]}_read_ids.txt', 'w') as f:
                 for r_id in label_df['Read ID'].tolist():
                     f.write(f'{str(r_id)}\n')
 
-    print('Finished.')
+    print(f'Finished with runtime of {time.time() - start_time} seconds')
 
 
 if __name__ == '__main__':
