@@ -52,6 +52,7 @@ def create_lineplot_for_single_metric(data, measure, mx, cut, epochs, plots_dir)
 def create_barplot_for_several_metrics(data, metric_collections, plots_dir, type_id):
     plotdata = data.copy()
     plotdata = plotdata.replace(['cutAfter_', 'cutBefore_'], ['', ''], regex=True)
+    plotdata = plotdata.sort_values(by='ID')
 
     for metric_collection in metric_collections:
         # plot 4 metrics (2 x 2) at once
