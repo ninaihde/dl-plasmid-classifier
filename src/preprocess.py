@@ -1,3 +1,8 @@
+"""
+Preprocessing of small dataset (used for testing purposes). Assumes folder per run in 'inpath', each containing two
+subfolders 'chr_fast5' and 'plasmid_fast5'.
+"""
+
 import click
 import glob
 import numpy as np
@@ -107,9 +112,9 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
 
 
 @click.command()
-@click.option('--inpath', '-i', type=click.Path(exists=True),
+@click.option('--inpath', '-i', type=click.Path(exists=True), required=True,
               help='input directory path with folder per run, each run folder must contain a folder per class')
-@click.option('--outpath', '-o', type=click.Path(),
+@click.option('--outpath', '-o', type=click.Path(), required=True,
               help='output directory path, folder per dataset with tensor files will be created')
 @click.option('--train_pct', '-t', default=0.8, help='splitting percentage for training set')
 @click.option('--val_pct', '-v', default=0.1, help='splitting percentage for validation set')

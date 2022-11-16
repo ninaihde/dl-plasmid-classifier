@@ -9,12 +9,14 @@ from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, m
 
 
 @click.command()
-@click.option('--input_data', '-d', help='path to root folder containing data', type=click.Path(exists=True))
-@click.option('--input_logs', '-l', help='path to folder with .txt logs/ all prints', type=click.Path(exists=True))
+@click.option('--input_data', '-d', help='path to root folder containing data', type=click.Path(exists=True),
+              required=True)
+@click.option('--input_logs', '-l', help='path to folder with .txt logs/ all prints', type=click.Path(exists=True),
+              required=True)
 @click.option('--output_plots', '-op', help='path to folder where subfolder for created plots of run ID will be stored',
-              type=click.Path(exists=True))
+              type=click.Path(exists=True), required=True)
 @click.option('--output_results', '-or', help='path to folder where calculated results will be stored',
-              type=click.Path(exists=True))
+              type=click.Path(exists=True), required=True)
 @click.option('--prefix', '-p', help='prefix of data folders to evaluate', default='prototype')
 @click.option('--run_id', '-r', help='identifier of runs to be evaluated', required=True)  # e.g. 'balancedLoss'
 def main(input_data, input_logs, output_plots, output_results, prefix, run_id):

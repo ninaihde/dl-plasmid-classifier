@@ -8,11 +8,11 @@ from plot_helper import create_barplot_for_several_metrics, create_lineplot_for_
 
 
 @click.command()
-@click.option('--input', '-i', help='path to root folder containing data', type=click.Path(exists=True))
+@click.option('--input', '-i', help='path to root folder containing data', type=click.Path(exists=True), required=True)
 @click.option('--output_plots', '-op', help='path to folder where subfolder for created plots of run ID will be stored',
-              type=click.Path(exists=True))
+              type=click.Path(exists=True), required=True)
 @click.option('--output_results', '-or', help='path to folder where calculated results will be stored',
-              type=click.Path(exists=True))
+              type=click.Path(exists=True), required=True)
 @click.option('--prefix', '-p', help='prefix of data folders to evaluate', default='prototypeV1')
 @click.option('--run_id', '-r', help='identifier of runs to be evaluated', required=True)  # e.g. 'balancedLoss'
 @click.option('--model_selection_criterion', '-s', default='Loss', type=click.Choice(['Loss', 'Accuracy']),

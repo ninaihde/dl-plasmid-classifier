@@ -62,15 +62,20 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
 
 
 @click.command()
-@click.option('--p_train', '-pt', help='file path of plasmid training set', type=click.Path(exists=True))
-@click.option('--p_val', '-pv', help='file path of plasmid validation set', type=click.Path(exists=True))
-@click.option('--p_ids', '-pid', help='file path of plasmid validation read ids', type=click.Path(exists=True))
-@click.option('--chr_train', '-ct', help='file path of chromosome training set', type=click.Path(exists=True))
-@click.option('--chr_val', '-cv', help='file path of chromosome validation set', type=click.Path(exists=True))
-@click.option('--chr_ids', '-cid', help='file path of chromosome validation read ids', type=click.Path(exists=True))
-@click.option('--out_folder', '-o', help='output folder path in which logs and models are saved', type=click.Path())
-@click.option('--interm', '-i', help='file path of model checkpoint (optional)', type=click.Path(exists=True),
-              required=False)
+@click.option('--p_train', '-pt', help='file path of plasmid training set', required=True, type=click.Path(exists=True))
+@click.option('--p_val', '-pv', help='file path of plasmid validation set', required=True, type=click.Path(exists=True))
+@click.option('--p_ids', '-pid', help='file path of plasmid validation read ids', required=True,
+              type=click.Path(exists=True))
+@click.option('--chr_train', '-ct', help='file path of chromosome training set', required=True,
+              type=click.Path(exists=True))
+@click.option('--chr_val', '-cv', help='file path of chromosome validation set', required=True,
+              type=click.Path(exists=True))
+@click.option('--chr_ids', '-cid', help='file path of chromosome validation read ids', required=True,
+              type=click.Path(exists=True))
+@click.option('--out_folder', '-o', help='output folder path in which logs and models are saved', required=True,
+              type=click.Path())
+@click.option('--interm', '-i', help='file path of model checkpoint (optional)', required=False,
+              type=click.Path(exists=True))
 @click.option('--model_selection_criterion', '-s', default='loss', type=click.Choice(['loss', 'acc']),
               help='model selection criterion, choose between validation loss ("loss") and validation accuracy ("acc")')
 @click.option('--patience', '-p', default=2, help='patience (i.e., number of epochs) to wait before early stopping')
