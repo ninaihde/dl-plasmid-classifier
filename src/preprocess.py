@@ -255,6 +255,19 @@ def main(inpath, outpath, train_pct, val_pct, cutoff, min_seq_len, max_seq_len, 
                 for r_id in label_df['Read ID'].tolist():
                     f.write(f'{str(r_id)}\n')
 
+        print(f'Finished dataset. Runtime passed: {time.time() - start_time} seconds')
+
+        # merging several produced .pt files of multiple-batch-modus of train resp. validation dataset
+        if not ds_name.endswith('test') and not use_single_batch:
+            print('Merging .pt files...')
+            merged_tensors = torch.Tensor()
+            for tensor_file in glob.glob(f'{outpath}/{ds_name}/*.pt'):
+                current_tensor = torch.load(tensor_file)
+                merged_tensors = torch.cat((merged_tensors, current_tensor))
+
+            torch.save(merged_tensors, f'{outpath}/{ds_name}/{ds_name.split("_")[1]}_{ds_name.split("_")[2]}_merged.pt')
+            print(f'Finished merging. Runtime passed: {time.time() - start_time} seconds')
+
     print(f'Finished with runtime of {time.time() - start_time} seconds')
 
 
