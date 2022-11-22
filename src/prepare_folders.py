@@ -99,11 +99,12 @@ def split_by_similarity(signatures, split_sim_threshold, random_gen):
             sim = signatures[idx][1].similarity(signatures[idx2][1], downsample=True)
             if sim > split_sim_threshold:
                 is_sim = True
-                if sim != 1.0 and signatures[idx2][0] not in train:
-                    train.append(signatures[idx2][0])
-                # if plasmids are identically, add second plasmid to skip list
-                skip_list.append(signatures[idx2][0])
-                break
+                if sim != 1.0:
+                    if signatures[idx2][0] not in train:
+                        train.append(signatures[idx2][0])
+                else:
+                    # do not add identically plasmids twice (to avoid simulating too many reads for this plasmid)
+                    skip_list.append(signatures[idx2][0])
 
         # if at least one plasmid (idx2) is similar to current plasmid (idx), add current plasmid to train
         if is_sim and signatures[idx][0] not in train:
@@ -112,11 +113,11 @@ def split_by_similarity(signatures, split_sim_threshold, random_gen):
         elif signatures[idx][0] not in train and signatures[idx][0] not in test_val:
             test_val.append(signatures[idx][0])
 
-    # Cut test_val in half (to extract validation and test data paths)
+    # cut test_val in half (to extract validation and test data paths)
     val = random_gen.choice(test_val, size=int(len(test_val) / 2), replace=False)
     test = [path for path in test_val if path not in val]
 
-    # TODO: 623 references missing (34.388 - 21.668 - 6.048 - 6.049)?
+    # TODO: 401 references missing
     print(f'Training   dataset: {len(train)} / {len(signatures)}')
     print(f'Validation dataset: {len(val)}   / {len(signatures)}')
     print(f'Test       dataset: {len(test)}  / {len(signatures)}')
