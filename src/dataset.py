@@ -1,3 +1,8 @@
+"""
+This dataset is an extended version of the dataset used in the SquiggleNet project, see
+https://github.com/welch-lab/SquiggleNet/blob/master/dataset.py
+"""
+
 import torch
 
 from torch.utils.data.dataset import Dataset

@@ -1,3 +1,12 @@
+"""
+PREPROCESSING STEP 3/3
+First, this script splits the negative reads into train, validation and test data. Afterwards, it normalizes all train
+and validation data using the z-score with the median absolute deviation. In addition, it performs cutting of the reads
+to a randomly chosen sequence length and padding of the reads to a fixed length called max_seq_len. Finally, it saves
+the train and validation data as torch tensors. For the testing datasets, only storing of the ground truth labels is
+performed.
+"""
+
 import click
 import glob
 import numpy as np

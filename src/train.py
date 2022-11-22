@@ -1,3 +1,9 @@
+"""
+This training procedure is an extended and adapted version of the one used in the SquiggleNet project, see
+https://github.com/welch-lab/SquiggleNet/blob/master/trainer.py. For example, both steps (training and validation) got
+an extra CrossEntropyLoss object which now balances the loss according to the number of reads per class.
+"""
+
 import click
 import os
 import pandas as pd

@@ -1,3 +1,8 @@
+"""
+This script evaluates the results of the execution of train.py. Therefore, different evaluation metrics produced by the
+training and validation are visualized.
+"""
+
 import click
 import glob
 import os
@@ -30,6 +35,7 @@ def main(input, output_plots, output_results, prefix, run_id, model_selection_cr
                  'Validation Loss', 'TN', 'FP', 'FN', 'TP', 'Balanced Accuracy', 'F1S', 'MCC', 'Precision', 'Recall',
                  'TNR', 'FPR', 'FNR'])
 
+    # TODO: check paths
     for config_folder in [cf for cf in os.listdir(input) if cf.startswith(prefix)]:
         for train_folder in glob.glob(f'{input}/{config_folder}/train_*_{run_id}/logs/'):
             # extract logs

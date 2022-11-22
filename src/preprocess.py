@@ -1,6 +1,7 @@
 """
-Preprocessing of small dataset (used for testing purposes). Assumes folder per run in 'inpath', each containing two
-subfolders 'chr_fast5' and 'plasmid_fast5'.
+OUTDATED
+This script preprocesses the small dataset used for testing purposes of our model. It assumes one folder per run in
+'inpath', each containing two subfolders called 'chr_fast5' and 'plasmid_fast5'.
 """
 
 import click

@@ -1,3 +1,8 @@
+"""
+This script evaluates the results of the execution of classify.py with test data. Therefore, different evaluation
+metrics are calculated and plotted.
+"""
+
 import click
 import glob
 import os
@@ -29,6 +34,7 @@ def main(input_data, input_logs, output_plots, output_results, prefix, run_id):
         columns=['Maximum Sequence Length', 'Cutting Method', 'Number of Epochs', 'TP', 'TN', 'FP', 'FN',
                  'Accuracy', 'Balanced Accuracy', 'Precision', 'Recall', 'F1S', 'MCC'])
 
+    # TODO: check paths
     for config_folder in [cf for cf in os.listdir(input_data) if cf.startswith(prefix)]:
         gt = pd.read_csv(f'{input_data}/{config_folder}/gt_test_labels.csv')
         max_seq_len = int(config_folder.split('_')[1].replace('max', ''))

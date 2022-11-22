@@ -1,3 +1,7 @@
+"""
+This script offers functions used by both, evaluate_trainings.py and evaluate_trainings.py.
+"""
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 

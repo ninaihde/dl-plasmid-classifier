@@ -1,3 +1,12 @@
+"""
+PREPROCESSING STEP 1/3
+This script prepares all needed inputs for prepare_folders.py. I.e., it moves all real test data to the respective
+folders (with the label in all filenames). Additionally, it downloads all references needed for simulation and saves
+them in the correct data format (.fasta). The content of this script is separated from prepare_folders.py because each
+researcher will have its own data resources and thus e.g. its own downloading procedure needed to create the input data
+for prepare_folders.py.
+"""
+
 import bz2
 import click
 import glob
@@ -106,7 +115,6 @@ def combine_rds_files(rds_file1, rds_file2, new_rds_path):
 
 
 def download_ref_neg(ref_neg_dir, rds_file):
-    # TODO: create .fasta per record?
     rds_data = pyreadr.read_r(rds_file)[None]  # get pandas DataFrame with [None]
     ftp_paths = rds_data['ftp_path'].tolist()
 

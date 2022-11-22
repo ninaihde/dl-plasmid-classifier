@@ -1,3 +1,10 @@
+"""
+PREPROCESSING STEP 2/3
+This script cleans the reference data of both classes. In addition, it splits the plasmid references it into training,
+validation and test data based on the Jaccard similarity score, as we want to generalize our approach for plasmids.
+Afterwards, prepare_tensors.py can be executed.
+"""
+
 import click
 import glob
 import os

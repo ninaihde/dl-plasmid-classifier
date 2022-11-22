@@ -1,3 +1,7 @@
+"""
+This model is from the SquiggleNet project, see https://github.com/welch-lab/SquiggleNet/blob/master/model.py
+"""
+
 import torch
 
 from torch import nn
