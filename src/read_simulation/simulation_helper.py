@@ -43,14 +43,20 @@ def get_coverage(n_reads, read_length, genome_length):
     return n_reads * read_length / genome_length
 
 
-def create_rds_file(fasta_dir, is_pos_class):
-    # assembly_accession = ID, fold1 = train/val/test, Pathogenic = whether it is positive class
-    rds = pd.DataFrame(columns=['assembly_accession', 'fold1', 'Pathogenic'])
-    for fasta_file in glob.glob(f'{fasta_dir}/*.fasta'):
+def append_refs(rds, ref_dir, ds_type, is_pos_class):
+    for fasta_file in glob.glob(f'{ref_dir}/*.fasta'):
         rds = rds.append({'assembly_accession': fasta_file.split(os.path.sep)[-1].split('.')[-2],
-                          'fold1': 'train',
+                          'fold1': ds_type,
                           'Pathogenic': is_pos_class},
                          ignore_index=True)
+    return rds
+
+
+def create_rds_file(train_ref_pos, val_ref_pos, test_ref_pos):
+    rds = pd.DataFrame(columns=['assembly_accession', 'fold1', 'Pathogenic'])
+    rds = append_refs(rds, train_ref_pos, 'train', True)
+    rds = append_refs(rds, val_ref_pos, 'val', True)
+    rds = append_refs(rds, test_ref_pos, 'test', True)
 
     return rds
 
@@ -60,50 +66,72 @@ def clean_rds_file(ref_neg_cleaned, chr_rds_path):
     all_ids = whole_rds['assembly_accession'].tolist()
     kept_ids = list()
 
+    # collect IDs of RDS entries that were NOT removed during similarity cleaning
     for fasta_file in glob.glob(f'{ref_neg_cleaned}/*.fasta'):
         for i in all_ids:
             if i in os.path.basename(fasta_file):
                 kept_ids.append(i)
-            break
+                break
 
+    # reduce RDS by only keeping entries that were NOT removed during similarity cleaning
     cleaned_rds = whole_rds[whole_rds['assembly_accession'].isin(kept_ids)]
-    pyreadr.write_rds(f'{chr_rds_path.split(".")[-2]}_cleaned.rds', cleaned_rds)
+
+    # fill "fold1" and "Pathogenic" column correctly
+    cleaned_rds['fold1'] = 'train'
+    cleaned_rds['Pathogenic'] = False
+
+    return cleaned_rds
 
 
 @click.command()
-@click.option('--ref_neg_cleaned', '-rn', help='cleaned directory of files to be simulated for negative class',
+@click.option('--ref_neg_cleaned', '-neg', help='directory of all files to be simulated for negative class',
               type=click.Path(exists=True), required=True)
-@click.option('--ref_pos_cleaned', '-rp', help='cleaned directory of files to be simulated for positive class',
+@click.option('--train_ref_pos', '-train', help='directory of train files to be simulated for positive class',
+              type=click.Path(exists=True), required=True)
+@click.option('--val_ref_pos', '-val', help='directory of validation files to be simulated for positive class',
+              type=click.Path(exists=True), required=True)
+@click.option('--test_ref_pos', '-test', help='directory of test files to be simulated for positive class',
               type=click.Path(exists=True), required=True)
 @click.option('--min_seq_len', '-min', help='minimum sequence length (in signals)', default=2000)
 @click.option('--max_seq_len', '-max', help='maximum sequence length (in signals)', default=8000)
 @click.option('--coverage', '-c', help='average coverage', default=2)
-@click.option('--plasmid_rds_path', '-pr', help='filepath to new RDS file of positive references', type=click.Path(),
-              required=True)
-@click.option('--chr_rds_path', '-cr', help='filepath to RDS file of negative references', type=click.Path(exists=True),
-              required=True)
-def main(ref_neg_cleaned, ref_pos_cleaned, min_seq_len, max_seq_len, coverage, plasmid_rds_path, chr_rds_path):
-    # calculate number of reads per class
-    plasmid_genome_length = get_genome_length(ref_pos_cleaned)
+@click.option('--plasmid_rds_path', '-rds_pos', help='filepath to new metadata file (.rds) of positive references',
+              type=click.Path(), required=True)
+@click.option('--chr_rds_path', '-rds_neg', help='filepath to metadata file (.rds) of negative references',
+              type=click.Path(exists=True), required=True)
+def main(ref_neg_cleaned, train_ref_pos, val_ref_pos, test_ref_pos, min_seq_len, max_seq_len,
+         coverage, plasmid_rds_path, chr_rds_path):
+    # 1. calculate number of reads per plasmid dataset
+    plasmid_genome_length = get_genome_length(train_ref_pos)
     read_length = get_read_length(min_seq_len, max_seq_len)
-    reads_per_p = get_n_reads(coverage, plasmid_genome_length, read_length)
-    print(f'Number of reads per plasmid: {reads_per_p}')
+    reads_per_p_train = get_n_reads(coverage, plasmid_genome_length, read_length)
+    print(f'Number of reads per training plasmid: {reads_per_p_train}\n')
 
+    plasmid_genome_length = get_genome_length(val_ref_pos)
+    reads_per_p_val = get_n_reads(coverage, plasmid_genome_length, read_length)
+    print(f'Number of reads per validation plasmid: {reads_per_p_val}\n')
+
+    plasmid_genome_length = get_genome_length(test_ref_pos)
+    reads_per_p_test = get_n_reads(coverage, plasmid_genome_length, read_length)
+    print(f'Number of reads per testing plasmid: {reads_per_p_test}\n')
+
+    # 2. check which read number can be taken for negative class
     chr_genome_length = get_genome_length(ref_neg_cleaned)
     reads_per_c = get_n_reads(coverage, chr_genome_length, read_length)
-    print(f'Number of reads per chromosome: {reads_per_c}')
+    print(f'Number of reads per chromosome (Coverage = {coverage}): {reads_per_c}\n')
 
-    # check whether chromosome coverage isn't too low when taking same number of reads as for plasmids
-    chr_coverage = get_coverage(reads_per_p, read_length, chr_genome_length)
-    print(f'Coverage of chromosomes with same number of reads as for plasmids: {round(chr_coverage, 4)}')
+    summed_read_number_plasmids = reads_per_p_train + reads_per_p_val + reads_per_p_test
+    # get coverage of chromosomes with same number of reads as for all plasmids
+    chr_coverage = get_coverage(summed_read_number_plasmids, read_length, chr_genome_length)
+    print(f'Number of reads per chromosome (Coverage = {round(chr_coverage, 4)}): {summed_read_number_plasmids}\n')
 
-    # create RDS file for positive class
-    # TODO: take care of 623 non-splitted files?
-    plasmid_rds_data = create_rds_file(ref_pos_cleaned, True)
+    # 3. create RDS file for positive class
+    plasmid_rds_data = create_rds_file(train_ref_pos, val_ref_pos, test_ref_pos)
     pyreadr.write_rds(plasmid_rds_path, plasmid_rds_data)
 
-    # remove entries from RDS file for negative class that were removed during similarity cleaning
-    clean_rds_file(ref_neg_cleaned, chr_rds_path)
+    # 4. clean RDS file of negative class
+    chr_rds_data = clean_rds_file(ref_neg_cleaned, chr_rds_path)
+    pyreadr.write_rds(f'{chr_rds_path.split(".")[-2]}_cleaned.rds', chr_rds_data)
 
 
 if __name__ == '__main__':
