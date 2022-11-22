@@ -1,4 +1,4 @@
-# Script based on read simulation by Jakub M. Bartoszewicz
+# Script based on the read simulation by Jakub M. Bartoszewicz
 # (see https://gitlab.com/dacs-hpi/deepac/-/tree/master/supplement_paper/Rscripts/read_simulation)
 
 source("src/read_simulation/SimulationWrapper.R")
@@ -6,10 +6,10 @@ source("src/read_simulation/SimulationWrapper.R")
 Workers <- 2
 
 Do.TrainingData <- T
-Do.ValidationData <- T
-Do.TestData <- T
+Do.ValidationData <- F
+Do.TestData <- F
 Do.Balance <- T
-Do.Balance.test <- T  # TODO: ?
+Do.Balance.test <- T
 Do.GetSizes <- T
 IMG.Sizes <- F
 Do.Clean <- F
@@ -29,36 +29,35 @@ MeanFragmentSize <- 8000
 FragmentStdDev <- 0
 ReadMargin <- 0
 
-TotalTrainingReadNumber <- 2e07  # TODO
-TotalValidationReadNumber <- 25e05  # TODO
-TotalTestReadNumber <- 25e05  # TODO
+TotalTrainingReadNumber <- 25e06  # TODO: sum up reads of train + val + test
+TotalValidationReadNumber <- 0
+TotalTestReadNumber <- 0
 Proportional2GenomeSize <- T
 LogTransform <- F
 testval.LogTransform <- F
 
-do.Positive <- T
-do.Negative <- F  # TODO: how to add paths for both classes? execute per class? how to deal with line 209 + 212?
+do.Positive <- F
+do.Negative <- T
 
 # only needed for Illumina
 pairedEnd <- F
 test.pairedEnd <- F
 
-FastaFileLocation <- ""  # TODO: ?
-train.FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/train_ref_pos"
-val.FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/val_ref_pos"
-test.FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/test_ref_pos"
-TrainingTargetDirectory <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/train_sim_pos"
-ValidationTargetDirectory <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/val_sim_pos"
-TestTargetDirectory <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/test_sim_pos"
+FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/ref_neg_cleaned"
+train.FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/ref_neg_cleaned"
+val.FastaFileLocation <- ""
+test.FastaFileLocation <- ""
+TrainingTargetDirectory <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/sim_neg"
+ValidationTargetDirectory <- ""
+TestTargetDirectory <- ""
 FastaExtension <- "fasta"
-#FilenamePostfixPattern <- "_"
-# for the viral dataset
-FilenamePostfixPattern <- "\\."  # TODO: ?
+FilenamePostfixPattern <- "_"     # chr:     fname = id_suffix.fasta
+#FilenamePostfixPattern <- "\\."  # plasmid: fname = id.fasta
 
 HomeFolder <- "/hpi/fs00/share/fg/renard/nina.ihde/"
 ProjectFolder <- "data/simulation/"
-IMGFile <- "metadata_pos_ref_cleaned.rds"
-IMGFile.new <- "metadata_pos_ref_cleaned_sizes.rds"
+IMGFile <- "metadata_neg_ref_cleaned.rds"
+IMGFile.new <- "metadata_neg_ref_cleaned_sizes.rds"
 
 # install packages not yet installed
 packages <- c("foreach", "doParallel")
@@ -206,10 +205,10 @@ Simulate.Dataset <- function(SetName, ReadNumber, Proportional2GenomeSize, Fix.C
     GroupMembers_HP <- which(GroupMembers$Pathogenic)
     GroupMembers_NP <- which(!GroupMembers$Pathogenic)
     if (length(GroupMembers_HP) > 0 & do.Positive) {
-        Check.train_HP <- Simulate.Reads.fromMultipleGenomes (Members=GroupMembers_HP, TotalReadNumber=ReadNumber, Proportional2GenomeSize=Proportional2GenomeSize, Fix.Coverage=Fix.Coverage, ReadLength=ReadLength, pairedEnd=pairedEnd, FastaFileLocation=FastaFileLocation, IMGdata=GroupMembers, TargetDirectory=file.path(TargetDirectory, "pathogenic"), FastaExtension=FastaExtension, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, Workers=Workers, Simulator=Simulator, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, RelativeGenomeSizes=RelativeGenomeSizes)
+        Check.train_HP <- Simulate.Reads.fromMultipleGenomes (Members=GroupMembers_HP, TotalReadNumber=ReadNumber, Proportional2GenomeSize=Proportional2GenomeSize, Fix.Coverage=Fix.Coverage, ReadLength=ReadLength, pairedEnd=pairedEnd, FastaFileLocation=FastaFileLocation, IMGdata=GroupMembers, TargetDirectory=file.path(TargetDirectory, "positive"), FastaExtension=FastaExtension, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, Workers=Workers, Simulator=Simulator, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, RelativeGenomeSizes=RelativeGenomeSizes)
     }
     if (length(GroupMembers_NP) > 0 & do.Negative) {
-        Check.train_NP <- Simulate.Reads.fromMultipleGenomes (Members=GroupMembers_NP, TotalReadNumber=ReadNumber, Proportional2GenomeSize=Proportional2GenomeSize, Fix.Coverage=Fix.Coverage, ReadLength=ReadLength, pairedEnd=pairedEnd, FastaFileLocation=FastaFileLocation, IMGdata=GroupMembers, TargetDirectory=file.path(TargetDirectory, "nonpathogenic"), FastaExtension=FastaExtension, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, Workers=Workers, Simulator=Simulator, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, RelativeGenomeSizes=RelativeGenomeSizes)
+        Check.train_NP <- Simulate.Reads.fromMultipleGenomes (Members=GroupMembers_NP, TotalReadNumber=ReadNumber, Proportional2GenomeSize=Proportional2GenomeSize, Fix.Coverage=Fix.Coverage, ReadLength=ReadLength, pairedEnd=pairedEnd, FastaFileLocation=FastaFileLocation, IMGdata=GroupMembers, TargetDirectory=file.path(TargetDirectory, "negative"), FastaExtension=FastaExtension, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, Workers=Workers, Simulator=Simulator, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, RelativeGenomeSizes=RelativeGenomeSizes)
     }
 }
 

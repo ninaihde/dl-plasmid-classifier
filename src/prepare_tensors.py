@@ -22,6 +22,37 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 from scipy import stats
 
 
+def split_randomly(paths, train_percentage, val_percentage, random_gen):
+    train = random_gen.choice(paths, size=int(len(paths) * train_percentage), replace=False)
+    val = random_gen.choice([p for p in paths if p not in train], size=int(len(paths) * val_percentage), replace=False)
+    test = [p for p in paths if p not in train and p not in val]
+
+    print(f'Training   dataset: {len(train)} / {len(paths)}')
+    print(f'Validation dataset: {len(val)}   / {len(paths)}')
+    print(f'Test       dataset: {len(test)}  / {len(paths)}')
+    return train, val, test
+
+
+def move_split_neg_reads(ds_paths, ds_dir):
+    if not os.path.exists(ds_dir):
+        os.makedirs(ds_dir)
+
+    for file_path in ds_paths:
+        shutil.copyfile(file_path, f'{ds_dir}/{os.path.basename(file_path)}')
+
+    print(f'Reads successfully moved to {os.path.basename(ds_dir)}.')
+
+
+def split_neg_reads(sim_neg, train_percentage, val_percentage, random_gen, train_sim_neg, val_sim_neg, test_sim_neg):
+    print('Randomly splitting negative references according to given percentages...')
+
+    paths = glob.glob(f'{sim_neg}/*.fasta')
+    train, val, test = split_randomly(paths, train_percentage, val_percentage, random_gen)
+
+    for (ds_paths, ds_dir) in [(train, train_sim_neg), (val, val_sim_neg), (test, test_sim_neg)]:
+        move_split_neg_reads(ds_paths, ds_dir)
+
+
 def combine_folders(dir_out, dir_in_neg, dir_in_pos):
     print(f'Moving files into {dir_out}...')
 
@@ -68,27 +99,29 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
 
 
 @click.command()
-@click.option('--test_real', '-test_r', type=click.Path(exists=True), required=True,
+@click.option('--sim_neg', type=click.Path(exists=True), required=True,
+              help='directory containing simulated reads of negative class (.fast5)')
+@click.option('--test_real', type=click.Path(exists=True), required=True,
               help='directory containing real test data (.fast5)')
-@click.option('--test_sim_neg', '-test_sn', type=click.Path(exists=True), required=True,
-              help='directory containing simulated test data for negative class (.fast5)')
-@click.option('--test_sim_pos', '-test_sp', type=click.Path(exists=True), required=True,
+@click.option('--test_sim_neg', type=click.Path(), required=True,
+              help='directory for simulated test data for negative class (.fast5)')
+@click.option('--test_sim_pos', type=click.Path(exists=True), required=True,
               help='directory containing simulated test data for positive class (.fast5)')
-@click.option('--test_sim', '-test_s', type=click.Path(), required=True,
+@click.option('--test_sim', type=click.Path(), required=True,
               help='directory for simulated test data of both classes (.fast5)')
-@click.option('--test_sim_real_neg', '-test_srn', type=click.Path(exists=True), required=True,
+@click.option('--test_sim_real_neg', type=click.Path(exists=True), required=True,
               help='directory containing simulated real test data for negative class (.fast5)')
-@click.option('--test_sim_real_pos', '-test_srp', type=click.Path(exists=True), required=True,
+@click.option('--test_sim_real_pos', type=click.Path(exists=True), required=True,
               help='directory containing simulated real test data for positive class (.fast5)')
-@click.option('--test_sim_real', '-test_sr', type=click.Path(), required=True,
+@click.option('--test_sim_real', type=click.Path(), required=True,
               help='directory for simulated real test data of both classes (.fast5)')
-@click.option('--train_sim_neg', '-train_sn', type=click.Path(exists=True), required=True,
-              help='directory containing simulated train data for negative class (.fast5)')
-@click.option('--train_sim_pos', '-train_sp', type=click.Path(exists=True), required=True,
+@click.option('--train_sim_neg', type=click.Path(), required=True,
+              help='directory for simulated train data for negative class (.fast5)')
+@click.option('--train_sim_pos', type=click.Path(exists=True), required=True,
               help='directory containing simulated train data for positive class (.fast5)')
-@click.option('--val_sim_neg', '-val_sn', type=click.Path(exists=True), required=True,
-              help='directory containing simulated validation data for negative class (.fast5)')
-@click.option('--val_sim_pos', '-val_sp', type=click.Path(exists=True), required=True,
+@click.option('--val_sim_neg', type=click.Path(), required=True,
+              help='directory for simulated validation data for negative class (.fast5)')
+@click.option('--val_sim_pos', type=click.Path(exists=True), required=True,
               help='directory containing simulated validation data for positive class (.fast5)')
 @click.option('--out_dir', '-o', type=click.Path(), required=True,
               help='directory for storing labels and read IDs')
@@ -99,11 +132,15 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
               help='whether random sequence length per read of validation set is applied before or after normalization')
 @click.option('--random_seed', '-s', default=42, help='seed for random operations')
 @click.option('--batch_size', '-b', default=5000, help='batch size, set to zero to use whole dataset size')
-def main(test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real_neg, test_sim_real_pos, test_sim_real,
+@click.option('--train_pct', '-t', default=0.8, help='splitting percentage for negative training reads')
+@click.option('--val_pct', '-v', default=0.1, help='splitting percentage for negative validation reads')
+def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real_neg, test_sim_real_pos, test_sim_real,
          train_sim_neg, train_sim_pos, val_sim_neg, val_sim_pos, out_dir, cutoff, min_seq_len, max_seq_len, cut_after,
-         random_seed, batch_size):
+         random_seed, batch_size, train_pct, val_pct):
     start_time = time.time()
+    random_gen = random.default_rng(random_seed)
 
+    split_neg_reads(sim_neg, train_pct, val_pct, random_gen, train_sim_neg, val_sim_neg, test_sim_neg)
     combine_folders(test_sim, test_sim_neg, test_sim_pos)
     combine_folders(test_sim_real, test_sim_real_neg, test_sim_real_pos)
 
@@ -112,8 +149,6 @@ def main(test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real_neg, tes
 
     if min_seq_len >= max_seq_len:
         raise ValueError('The minimum sequence length must be smaller than the maximum sequence length!')
-
-    random_gen = random.default_rng(random_seed)
 
     # introduce boolean indicating whether dataset size should be used as batch size
     use_single_batch = False
@@ -161,6 +196,7 @@ def main(test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real_neg, tes
                     if len(raw_data) >= (cutoff + seq_len):
                         batch_idx += 1
 
+                        # store ground truth labels for validation dataset
                         if 'val' in ds_name:
                             label = 'plasmid' if ds_name.split('_')[2] == 'pos' else 'chr'
                             label_df = pd.concat(
@@ -227,7 +263,7 @@ def main(test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real_neg, tes
 
         print(f'Finished dataset. Runtime passed: {time.time() - start_time} seconds')
 
-        # merging several produced .pt files of multiple-batch-modus of train resp. validation dataset
+        # merge several .pt files produced by multiple-batch-modus
         if 'test' not in ds_name and not use_single_batch:
             print('Merging .pt files...')
             merged_tensors = torch.Tensor()
