@@ -3,7 +3,7 @@
 #
 # Functions based on read simulation with Mason by Carlus Deneke
 
-Simulate.Reads <- function(InputFastaFile=NULL, ReadCoverage=NULL, ReadLength=250, pairedEnd=F,
+Simulate.Reads <- function(DeepSimDir=NULL, InputFastaFile=NULL, ReadCoverage=NULL, ReadLength=250, pairedEnd=F,
                            TargetDirectory=NULL, MeanFragmentSize=600, FragmentStdDev=60, ReadMargin=10,
                            Simulator=c("Neat", "Mason", "Mason2"), ReadNumber=NULL, Cleaned=T,
                            AllowNsFromGenome=F) {
@@ -169,15 +169,14 @@ Simulate.Reads <- function(InputFastaFile=NULL, ReadCoverage=NULL, ReadLength=25
 	    dir.create(fasta_folder_split)
         system(paste0("bioawk -cfastx '{print \">\"$name \" \" $comment \"\\n\" $seq > (", "\"", fasta_folder_split ,"\"", "$name\".fasta\")}' ", InputFastaFile))
 	    # simulate reads (output from the contigs is combined into one fasta again)
-	    output_fasta <- file.path(TargetDirectory,basename(InputFastaFile))
+	    output_fasta <- file.path(TargetDirectory, basename(InputFastaFile))
 	    file.create(output_fasta)
 	    total_seq_length <- as.numeric(system(paste("bioawk -cfastx 'BEGIN{ seq_length = 0} {seq_length += length($seq)} END{print seq_length}'", InputFastaFile), intern=T))
 	    for(file in list.files(fasta_folder_split, full.names=T)) {
 		    seq_length <- as.numeric(system(paste("bioawk -cfastx '{print length($seq)}'", file), intern=T))
 		    read_numb <- seq_length/total_seq_length * ReadNumber
 		    output <- file.path(TargetDirectory, paste0(basename(InputFastaFile), "_", basename(file)))
-	        home_dir_ds <- "/mnt/biolibs/ubuntu/DeepSimulator"
-		    system(paste("./deep_simulator -i", file, "-n", round(read_numb),"-l", ReadLength, "-o", output, "-c 14", "-H", home_dir_ds, "-S 1"))
+		    system(paste(DeepSimDir + "./deep_simulator -i", file, "-n", round(read_numb), "-l", ReadLength, "-o", output, "-c 14", "-H", DeepSimDir, "-S 1"))
 		    system(paste("cat", file.path(output, "pass.fastq"), ">>", output_fasta))
 		    # if uncommented, only the sequence is kept, other info like current signal is deleted
             #system(paste("rm -r ", output))
@@ -192,7 +191,7 @@ Simulate.Reads.fromMultipleGenomes <- function(Members=NULL, TotalReadNumber=NUL
                                                FastaExtension=".fna", MeanFragmentSize, FragmentStdDev, Workers,
                                                Simulator=c("Neat", "Mason", "Mason2"), Cleaned=T,
                                                FilenamePostfixPattern="_", ReadMargin=10, AllowNsFromGenome=F,
-                                               RelativeGenomeSizes=F) {
+                                               RelativeGenomeSizes=F, DeepSimDir=NULL) {
 
     if (any(c(is.null(Members), is.null(TotalReadNumber), is.null(Proportional2GenomeSize ), is.null(FastaFileLocation  ), is.null(IMGdata ), is.null(TargetDirectory)))) stop("Please submit valid variables to function Simulate.Reads.fromMultipleGenomes")
 
@@ -258,7 +257,7 @@ Simulate.Reads.fromMultipleGenomes <- function(Members=NULL, TotalReadNumber=NUL
         ReadLengths <- sapply(IMGdata$Genome.Size[Members], function(x){min(x, ReadLength)})
     }
 
-    Check <- foreach(i = 1:length(Members) ) %dopar% {
+    Check <- foreach(i = 1:length(Members)) %dopar% {
 
         # Find corresponding fasta file
         CurrentFasta <- grep(paste0("\\/", IMGdata$assembly_accession[Members[i]], FilenamePostfixPattern), FastaFiles, value=T)
@@ -267,16 +266,15 @@ Simulate.Reads.fromMultipleGenomes <- function(Members=NULL, TotalReadNumber=NUL
             cat(paste("###WARNING: Genome smaller than fragment/read size (", basename(CurrentFasta), ")###\n### frag size:", MeanFragmentSizes[i], "stddev:", FragmentStdDevs[i], "read len:", ReadLengths[i], "###\n"))
         }
 
-
         if (length(CurrentFasta) > 1) {
-            stop(paste0("More than one match for given Accession: ", IMGdata$assembly_accession[Members[i]],": ", paste0(CurrentFasta, collapse=" "), " in ", paste(file.path(FastaFileLocation))))
+            stop(paste0("More than one match for given Accession: ", IMGdata$assembly_accession[Members[i]], ": ", paste0(CurrentFasta, collapse=" "), " in ", paste(file.path(FastaFileLocation))))
         } else if (length(CurrentFasta) == 0) {
-            stop(paste0("No match for given Accession: ", IMGdata$assembly_accession[Members[i]],": ", paste0(CurrentFasta, collapse=" "), " in ", paste(file.path(FastaFileLocation))))
+            stop(paste0("No match for given Accession: ", IMGdata$assembly_accession[Members[i]], ": ", paste0(CurrentFasta, collapse=" "), " in ", paste(file.path(FastaFileLocation))))
         } else {
             if (Simulator == "Neat") {
-                Simulate.Reads(CurrentFasta, ReadCoverage=ReadCoveragePerGenome[i], ReadLength=ReadLengths[i], pairedEnd=pairedEnd, TargetDirectory=TargetDirectory, MeanFragmentSize=MeanFragmentSizes[i], FragmentStdDev=FragmentStdDevs[i], Simulator=Simulator, Cleaned=Cleaned, AllowNsFromGenome=AllowNsFromGenome)
+                Simulate.Reads(DeepSimDir, CurrentFasta, ReadCoverage=ReadCoveragePerGenome[i], ReadLength=ReadLengths[i], pairedEnd=pairedEnd, TargetDirectory=TargetDirectory, MeanFragmentSize=MeanFragmentSizes[i], FragmentStdDev=FragmentStdDevs[i], Simulator=Simulator, Cleaned=Cleaned, AllowNsFromGenome=AllowNsFromGenome)
             } else {
-                Simulate.Reads(CurrentFasta, ReadLength=ReadLengths[i], pairedEnd=pairedEnd, TargetDirectory=TargetDirectory, MeanFragmentSize=MeanFragmentSizes[i], FragmentStdDev=FragmentStdDevs[i], ReadMargin=ReadMargin, Simulator=Simulator, ReadNumber=ReadNumberPerGenome[i], Cleaned=Cleaned, AllowNsFromGenome=AllowNsFromGenome)
+                Simulate.Reads(DeepSimDir, CurrentFasta, ReadLength=ReadLengths[i], pairedEnd=pairedEnd, TargetDirectory=TargetDirectory, MeanFragmentSize=MeanFragmentSizes[i], FragmentStdDev=FragmentStdDevs[i], ReadMargin=ReadMargin, Simulator=Simulator, ReadNumber=ReadNumberPerGenome[i], Cleaned=Cleaned, AllowNsFromGenome=AllowNsFromGenome)
             }         
         }
     }  

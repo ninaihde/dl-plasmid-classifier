@@ -43,6 +43,8 @@ do.Negative <- F
 pairedEnd <- F
 test.pairedEnd <- F
 
+DeepSimDir <- "/hpi/fs00/share/fg/renard/nina.ihde/DeepSimulator"
+
 FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/trainval_ref_pos"
 train.FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/trainval_ref_pos/train_ref_pos"
 val.FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/trainval_ref_pos/val_ref_pos"
@@ -58,16 +60,6 @@ HomeFolder <- "/hpi/fs00/share/fg/renard/nina.ihde/"
 ProjectFolder <- "data/simulation/"
 IMGFile <- "metadata_pos_ref.rds"
 IMGFile.new <- "metadata_pos_ref_sizes.rds"
-
-# install packages not yet installed
-packages <- c("foreach", "doParallel")
-installed_packages <- packages %in% rownames(installed.packages())
-if (any(installed_packages == F)) {
-  install.packages(packages[!installed_packages])
-}
-
-# hide package loading output
-invisible(lapply(packages, library, character.only=T))
 
 if (Do.Clean) {
 
@@ -193,9 +185,9 @@ if (Do.Balance.test) {
     test.Fix.Coverage <- T
 }
 
-Simulate.Dataset <- function(SetName, ReadNumber, Proportional2GenomeSize, Fix.Coverage, ReadLength, pairedEnd,
-                             FastaFileLocation, IMGdata, TargetDirectory, MeanFragmentSize=600, FragmentStdDev=60,
-                             Workers=1, Simulator=c("Neat", "Mason", "Mason2"), FastaExtension=".fna",
+Simulate.Dataset <- function(DeepSimDir, SetName, ReadNumber, Proportional2GenomeSize, Fix.Coverage, ReadLength,
+                             pairedEnd, FastaFileLocation, IMGdata, TargetDirectory, MeanFragmentSize=600,
+                             FragmentStdDev=60, Workers=1, Simulator=c("Neat", "Mason", "Mason2"), FastaExtension=".fna",
                              FilenamePostfixPattern="_", ReadMargin=10, AllowNsFromGenome=F, RelativeGenomeSizes=F) {
 
     dir.create(file.path(TargetDirectory), showWarnings=F)
@@ -205,10 +197,10 @@ Simulate.Dataset <- function(SetName, ReadNumber, Proportional2GenomeSize, Fix.C
     GroupMembers_HP <- which(GroupMembers$Pathogenic)
     GroupMembers_NP <- which(!GroupMembers$Pathogenic)
     if (length(GroupMembers_HP) > 0 & do.Positive) {
-        Check.train_HP <- Simulate.Reads.fromMultipleGenomes (Members=GroupMembers_HP, TotalReadNumber=ReadNumber, Proportional2GenomeSize=Proportional2GenomeSize, Fix.Coverage=Fix.Coverage, ReadLength=ReadLength, pairedEnd=pairedEnd, FastaFileLocation=FastaFileLocation, IMGdata=GroupMembers, TargetDirectory=file.path(TargetDirectory, "positive"), FastaExtension=FastaExtension, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, Workers=Workers, Simulator=Simulator, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, RelativeGenomeSizes=RelativeGenomeSizes)
+        Check.train_HP <- Simulate.Reads.fromMultipleGenomes (Members=GroupMembers_HP, TotalReadNumber=ReadNumber, Proportional2GenomeSize=Proportional2GenomeSize, Fix.Coverage=Fix.Coverage, ReadLength=ReadLength, pairedEnd=pairedEnd, FastaFileLocation=FastaFileLocation, IMGdata=GroupMembers, TargetDirectory=file.path(TargetDirectory, "positive"), FastaExtension=FastaExtension, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, Workers=Workers, Simulator=Simulator, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, RelativeGenomeSizes=RelativeGenomeSizes, DeepSimDir=DeepSimDir)
     }
     if (length(GroupMembers_NP) > 0 & do.Negative) {
-        Check.train_NP <- Simulate.Reads.fromMultipleGenomes (Members=GroupMembers_NP, TotalReadNumber=ReadNumber, Proportional2GenomeSize=Proportional2GenomeSize, Fix.Coverage=Fix.Coverage, ReadLength=ReadLength, pairedEnd=pairedEnd, FastaFileLocation=FastaFileLocation, IMGdata=GroupMembers, TargetDirectory=file.path(TargetDirectory, "negative"), FastaExtension=FastaExtension, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, Workers=Workers, Simulator=Simulator, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, RelativeGenomeSizes=RelativeGenomeSizes)
+        Check.train_NP <- Simulate.Reads.fromMultipleGenomes (Members=GroupMembers_NP, TotalReadNumber=ReadNumber, Proportional2GenomeSize=Proportional2GenomeSize, Fix.Coverage=Fix.Coverage, ReadLength=ReadLength, pairedEnd=pairedEnd, FastaFileLocation=FastaFileLocation, IMGdata=GroupMembers, TargetDirectory=file.path(TargetDirectory, "negative"), FastaExtension=FastaExtension, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, Workers=Workers, Simulator=Simulator, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, RelativeGenomeSizes=RelativeGenomeSizes, DeepSimDir=DeepSimDir)
     }
 }
 
@@ -216,7 +208,7 @@ Simulate.Dataset <- function(SetName, ReadNumber, Proportional2GenomeSize, Fix.C
 # Simulate test reads
 if (Do.TestData == T) {
     cat("###Simulating test data...###")
-    Simulate.Dataset("test", TestReadNumber, Proportional2GenomeSize, test.Fix.Coverage, ReadLength, test.pairedEnd, test.FastaFileLocation, IMGdata, TestTargetDirectory, Workers=Workers, Simulator=Simulator, FastaExtension=FastaExtension, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, RelativeGenomeSizes=testval.LogTransform)
+    Simulate.Dataset(DeepSimDir, "test", TestReadNumber, Proportional2GenomeSize, test.Fix.Coverage, ReadLength, test.pairedEnd, test.FastaFileLocation, IMGdata, TestTargetDirectory, Workers=Workers, Simulator=Simulator, FastaExtension=FastaExtension, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, RelativeGenomeSizes=testval.LogTransform)
     cat("###Done!###")
 }
 
@@ -224,7 +216,7 @@ if (Do.TestData == T) {
 # simulate for each class
 if (Do.ValidationData == T) {
     cat("###Simulating validation data...###")
-    Simulate.Dataset("val", ValidationReadNumber, Proportional2GenomeSize, validation.Fix.Coverage, ReadLength, pairedEnd, val.FastaFileLocation, IMGdata, ValidationTargetDirectory, Workers=Workers, Simulator=Simulator, FastaExtension=FastaExtension, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, RelativeGenomeSizes=testval.LogTransform)
+    Simulate.Dataset(DeepSimDir, "val", ValidationReadNumber, Proportional2GenomeSize, validation.Fix.Coverage, ReadLength, pairedEnd, val.FastaFileLocation, IMGdata, ValidationTargetDirectory, Workers=Workers, Simulator=Simulator, FastaExtension=FastaExtension, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, RelativeGenomeSizes=testval.LogTransform)
     cat("###Done!###")
 }
 
@@ -232,6 +224,6 @@ if (Do.ValidationData == T) {
 # simulate for each class
 if (Do.TrainingData == T) {
     cat("###Simulating training data...###")
-    Simulate.Dataset("train", TrainingReadNumber, Proportional2GenomeSize, training.Fix.Coverage, ReadLength, pairedEnd, train.FastaFileLocation, IMGdata, TrainingTargetDirectory, Workers=Workers, Simulator=Simulator, FastaExtension=FastaExtension, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, RelativeGenomeSizes=LogTransform)
+    Simulate.Dataset(DeepSimDir, "train", TrainingReadNumber, Proportional2GenomeSize, training.Fix.Coverage, ReadLength, pairedEnd, train.FastaFileLocation, IMGdata, TrainingTargetDirectory, Workers=Workers, Simulator=Simulator, FastaExtension=FastaExtension, FilenamePostfixPattern=FilenamePostfixPattern, ReadMargin=ReadMargin, AllowNsFromGenome=AllowNsFromGenome, MeanFragmentSize=MeanFragmentSize, FragmentStdDev=FragmentStdDev, RelativeGenomeSizes=LogTransform)
     cat("###Done!###")
 }
