@@ -91,7 +91,7 @@ def download_ref_pos(ref_pos_dir):
     with bz2.open(f'{ref_pos_dir}/ref_pos.fna.bz2', 'rt') as f_in:
         # write each sequence to a separate .fasta file
         for record in SeqIO.parse(f_in, 'fasta'):
-            with open(f'{ref_pos_dir}/plsdb_{record.id}.fasta', 'w') as f_out:
+            with open(f'{ref_pos_dir}/{record.id}.fasta', 'w') as f_out:
                 c += 1
                 r = SeqIO.write(record, f_out, 'fasta')
                 if r != 1:
