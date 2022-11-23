@@ -49,16 +49,10 @@ def clean_neg_references(ref_neg_dir, ref_pos_dir, clean_sim_threshold, ref_neg_
 
     # move references to new directory by leaving out too similar records
     for fasta_file in glob.glob(f'{ref_neg_dir}/*.fasta'):
-        with open(fasta_file, 'r') as f_in:
+        with open(fasta_file, 'r') as f_in, open(f'{ref_neg_dir_cleaned}/{os.path.basename(fasta_file)}', 'w') as f_out:
             for record in SeqIO.parse(f_in, 'fasta'):
                 if (fasta_file, record.id) not in refs_to_remove:
-                    try:
-                        # try to open file and append record
-                        with open(f'{ref_neg_dir_cleaned}/{os.path.basename(fasta_file)}', 'w') as f_out:
-                            SeqIO.write(record, f_out, 'fasta')
-                    except IOError:
-                        # if file is already opened, only append record
-                        SeqIO.write(record, f_out, 'fasta')
+                    SeqIO.write(record, f_out, 'fasta')
 
 
 def clean_pos_references(test_dir, ref_pos_dir, clean_sim_threshold, ref_pos_dir_cleaned):
