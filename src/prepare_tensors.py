@@ -1,10 +1,10 @@
 """
 PREPROCESSING STEP 3/3
-First, this script splits the negative reads into train, validation and test data. Afterwards, it normalizes all train
-and validation data using the z-score with the median absolute deviation. In addition, it performs cutting of the reads
-to a randomly chosen sequence length and padding of the reads to a fixed length called max_seq_len. Finally, it saves
-the train and validation data as torch tensors. For the testing datasets, only storing of the ground truth labels is
-performed.
+This script processes simulated data. Therefore, it splits the negative reads into train, validation and test data.
+Afterwards, it normalizes all train and validation data using the z-score with the median absolute deviation. In
+addition, it performs cutting of the reads to a randomly chosen sequence length and padding of the reads to a fixed
+length called max_seq_len. Finally, it saves the train and validation data as torch tensors. For the testing datasets,
+only storing of the ground truth labels is performed.
 """
 
 import click
@@ -33,24 +33,20 @@ def split_randomly(paths, train_percentage, val_percentage, random_gen):
     return train, val, test
 
 
-def move_split_neg_reads(ds_paths, ds_dir):
-    if not os.path.exists(ds_dir):
-        os.makedirs(ds_dir)
-
-    for file_path in ds_paths:
-        shutil.copyfile(file_path, f'{ds_dir}/{os.path.basename(file_path)}')
-
-    print(f'Reads successfully moved to {os.path.basename(ds_dir)}.')
-
-
 def split_neg_reads(sim_neg, train_percentage, val_percentage, random_gen, train_sim_neg, val_sim_neg, test_sim_neg):
     print('Randomly splitting negative references according to given percentages...')
 
     paths = glob.glob(f'{sim_neg}/*.fasta')
     train, val, test = split_randomly(paths, train_percentage, val_percentage, random_gen)
 
-    for (ds_paths, ds_dir) in [(train, train_sim_neg), (val, val_sim_neg), (test, test_sim_neg)]:
-        move_split_neg_reads(ds_paths, ds_dir)
+    for (ds_files, ds_dir) in [(train, train_sim_neg), (val, val_sim_neg), (test, test_sim_neg)]:
+        if not os.path.exists(ds_dir):
+            os.makedirs(ds_dir)
+
+        for file in ds_files:
+            shutil.copyfile(file, f'{ds_dir}/{os.path.basename(file)}')
+
+        print(f'Reads successfully moved to {os.path.basename(ds_dir)}.')
 
 
 def combine_folders(dir_out, dir_in_neg, dir_in_pos):
@@ -92,8 +88,7 @@ def normalize(data):
 def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
     # Note: overwrites already existing file
     data = torch.tensor(data).float()
-    tensor_path = f'{outpath_ds}/{outpath_ds.split("_")[-3]}_{outpath_ds.split("_")[-1]}' \
-                  f'{"" if use_single_batch else "_" + str(batch_idx)}.pt'
+    tensor_path = f'{outpath_ds}/tensors{"" if use_single_batch else "_" + str(batch_idx)}.pt'
     torch.save(data, tensor_path)
     print(f'Torch tensor saved: {tensor_path}')
 
@@ -140,8 +135,20 @@ def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real
     start_time = time.time()
     random_gen = random.default_rng(random_seed)
 
+    if not os.path.exists(train_sim_neg):
+        os.makedirs(train_sim_neg)
+    if not os.path.exists(val_sim_neg):
+        os.makedirs(val_sim_neg)
+    if not os.path.exists(test_sim_neg):
+        os.makedirs(test_sim_neg)
     split_neg_reads(sim_neg, train_pct, val_pct, random_gen, train_sim_neg, val_sim_neg, test_sim_neg)
+
+    if not os.path.exists(test_sim):
+        os.makedirs(test_sim)
     combine_folders(test_sim, test_sim_neg, test_sim_pos)
+
+    if not os.path.exists(test_sim_real):
+        os.makedirs(test_sim_real)
     combine_folders(test_sim_real, test_sim_real_neg, test_sim_real_pos)
 
     if not os.path.exists(out_dir):
@@ -155,9 +162,13 @@ def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real
     if batch_size == 0:
         use_single_batch = True
 
+    # TODO: exclude real_test as .fast5 files are still missing
     for ds_path in [test_real, test_sim, test_sim_real, train_sim_neg, train_sim_pos, val_sim_neg, val_sim_pos]:
         ds_name = os.path.basename(ds_path)
         print(f'\nDataset: {ds_name}')
+
+        if not os.path.exists(f'{out_dir}/{ds_name}'):
+            os.makedirs(f'{out_dir}/{ds_name}')
 
         if 'reads' in locals():
             del reads
@@ -225,7 +236,7 @@ def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real
                                 # pad with zeros until maximum sequence length
                                 reads[i] += [0] * (max_seq_len - len(reads[i]))
 
-                            save_as_tensor(reads, ds_path, batch_idx)
+                            save_as_tensor(reads, f'{out_dir}/{ds_name}', batch_idx)
                             del reads
                             reads = list()
                             del seq_lengths
@@ -246,7 +257,7 @@ def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real
                     # pad with zeros until maximum sequence length
                     reads[i] += [0] * (max_seq_len - len(reads[i]))
 
-                save_as_tensor(reads, ds_path, batch_idx, use_single_batch)
+                save_as_tensor(reads, f'{out_dir}/{ds_name}', batch_idx, use_single_batch)
                 del reads
                 reads = list()
                 del seq_lengths
@@ -267,11 +278,11 @@ def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real
         if 'test' not in ds_name and not use_single_batch:
             print('Merging .pt files...')
             merged_tensors = torch.Tensor()
-            for tensor_file in glob.glob(f'{ds_path}/*.pt'):
+            for tensor_file in glob.glob(f'{out_dir}/{ds_name}/*.pt'):
                 current_tensor = torch.load(tensor_file)
                 merged_tensors = torch.cat((merged_tensors, current_tensor))
 
-            torch.save(merged_tensors, f'{ds_path}/{ds_name.split("_")[0]}_{ds_name.split("_")[2]}_merged.pt')
+            torch.save(merged_tensors, f'{out_dir}/{ds_name}/tensors_merged.pt')
             print(f'Finished merging. Runtime passed: {time.time() - start_time} seconds')
 
     print(f'Overall runtime: {time.time() - start_time} seconds')
