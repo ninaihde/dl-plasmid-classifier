@@ -45,10 +45,10 @@ def get_coverage(n_reads, read_length, genome_length):
 
 def append_refs(rds, ref_dir, ds_type, is_pos_class):
     for fasta_file in glob.glob(f'{ref_dir}/*.fasta'):
-        rds = rds.append({'assembly_accession': fasta_file.split(os.path.sep)[-1].split('.')[-2],
-                          'fold1': ds_type,
-                          'Pathogenic': is_pos_class},
-                         ignore_index=True)
+        rds = pd.concat([rds, pd.DataFrame([{'assembly_accession': fasta_file.split(os.path.sep)[-1].split('.')[-2],
+                                             'fold1': ds_type,
+                                             'Pathogenic': is_pos_class}])],
+                        ignore_index=True)
     return rds
 
 
@@ -79,6 +79,8 @@ def clean_rds_file(ref_neg_cleaned, chr_rds_path):
     # fill "fold1" and "Pathogenic" column correctly
     cleaned_rds['fold1'] = 'train'
     cleaned_rds['Pathogenic'] = False
+
+    print(f'Kept {len(cleaned_rds)} out of {len(whole_rds)} entries in RDS file of negative references.')
 
     return cleaned_rds
 
@@ -131,7 +133,7 @@ def main(ref_neg_cleaned, train_ref_pos, val_ref_pos, test_ref_pos, min_seq_len,
 
     # 4. clean RDS file of negative class
     chr_rds_data = clean_rds_file(ref_neg_cleaned, chr_rds_path)
-    pyreadr.write_rds(f'{chr_rds_path.split(".")[-2]}_cleaned.rds', chr_rds_data)
+    pyreadr.write_rds(f'{chr_rds_path[:-4]}_cleaned.rds', chr_rds_data)
 
 
 if __name__ == '__main__':
