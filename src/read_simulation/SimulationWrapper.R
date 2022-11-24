@@ -176,7 +176,7 @@ Simulate.Reads <- function(DeepSimDir=NULL, InputFastaFile=NULL, ReadCoverage=NU
 		    seq_length <- as.numeric(system(paste("bioawk -cfastx '{print length($seq)}'", file), intern=T))
 		    read_numb <- seq_length/total_seq_length * ReadNumber
 		    output <- file.path(TargetDirectory, paste0(basename(InputFastaFile), "_", basename(file)))
-		    system(paste(DeepSimDir + "./deep_simulator -i", file, "-n", round(read_numb), "-l", ReadLength, "-o", output, "-c 14", "-H", DeepSimDir, "-S 1"))
+		    system(paste(DeepSimDir + "/deep_simulator -i", file, "-n", round(read_numb), "-l", ReadLength, "-o", output, "-c 14", "-H", DeepSimDir, "-S 1"))
 		    system(paste("cat", file.path(output, "pass.fastq"), ">>", output_fasta))
 		    # if uncommented, only the sequence is kept, other info like current signal is deleted
             #system(paste("rm -r ", output))
