@@ -61,28 +61,12 @@ def create_rds_file(train_ref_pos, val_ref_pos, test_ref_pos):
     return rds
 
 
-def clean_rds_file(ref_neg_cleaned, chr_rds_path):
-    whole_rds = pyreadr.read_r(chr_rds_path)[None]
-    all_ids = whole_rds['assembly_accession'].tolist()
-    kept_ids = list()
+def update_rds_file(chr_rds_path):
+    rds = pyreadr.read_r(chr_rds_path)[None]
+    rds['fold1'] = 'train'
+    rds['Pathogenic'] = False
 
-    # collect IDs of RDS entries that were NOT removed during similarity cleaning
-    for fasta_file in glob.glob(f'{ref_neg_cleaned}/*.fasta'):
-        for i in all_ids:
-            if i in os.path.basename(fasta_file):
-                kept_ids.append(i)
-                break
-
-    # reduce RDS by only keeping entries that were NOT removed during similarity cleaning
-    cleaned_rds = whole_rds[whole_rds['assembly_accession'].isin(kept_ids)]
-
-    # fill "fold1" and "Pathogenic" column correctly
-    cleaned_rds['fold1'] = 'train'
-    cleaned_rds['Pathogenic'] = False
-
-    print(f'Kept {len(cleaned_rds)} out of {len(whole_rds)} entries in RDS file of negative references.')
-
-    return cleaned_rds
+    return rds
 
 
 @click.command()
@@ -131,9 +115,9 @@ def main(ref_neg_cleaned, train_ref_pos, val_ref_pos, test_ref_pos, min_seq_len,
     plasmid_rds_data = create_rds_file(train_ref_pos, val_ref_pos, test_ref_pos)
     pyreadr.write_rds(plasmid_rds_path, plasmid_rds_data)
 
-    # 4. clean RDS file of negative class
-    chr_rds_data = clean_rds_file(ref_neg_cleaned, chr_rds_path)
-    pyreadr.write_rds(f'{chr_rds_path[:-4]}_cleaned.rds', chr_rds_data)
+    # 4. update RDS file of negative class
+    chr_rds_data = update_rds_file(chr_rds_path)
+    pyreadr.write_rds(f'{os.path.dirname(chr_rds_path)}/metadata_neg_ref.rds', chr_rds_data)
 
 
 if __name__ == '__main__':

@@ -102,18 +102,6 @@ def download_ref_pos(ref_pos_dir):
     os.remove(f'{ref_pos_dir}/ref_pos.fna.bz2')
 
 
-def combine_rds_files(rds_file1, rds_file2, new_rds_path):
-    rds1 = pyreadr.read_r(rds_file1)[None]
-    rds2 = pyreadr.read_r(rds_file2)[None]
-
-    # remove non-shared columns
-    rds1 = rds1.drop(columns=['subset'])
-    rds2 = rds2.drop(columns=['bioproject.orig', 'assembly_accession.orig'])
-
-    new_rds_data = pd.concat([rds1, rds2], ignore_index=True)
-    pyreadr.write_rds(new_rds_path, new_rds_data)
-
-
 def download_ref_neg(ref_neg_dir, rds_file):
     rds_data = pyreadr.read_r(rds_file)[None]  # get pandas DataFrame with [None]
     ftp_paths = rds_data['ftp_path'].tolist()
@@ -158,13 +146,9 @@ def download_ref_neg(ref_neg_dir, rds_file):
               help='directory path to negative references used in simulation later on')
 @click.option('--csv_file', '-c', type=click.Path(exists=True), required=True,
               help='path to CSV file containing read IDs of the new real .fasta data divided by class')
-@click.option('--rds_file1', '-r1', type=click.Path(exists=True), required=True,
+@click.option('--rds_file', '-r', type=click.Path(exists=True), required=True,
               help='path to RDS file of the negative references (from 2018)')
-@click.option('--rds_file2', '-r2', type=click.Path(exists=True), required=True,
-              help='path to RDS file of the negative references (from 2019)')
-@click.option('--rds_file', '-r', type=click.Path(), required=True,
-              help='path to final RDS file of the negative references')
-def main(original_dir, genomes_dir, test_real_dir, ref_pos_dir, ref_neg_dir, csv_file, rds_file1, rds_file2, rds_file):
+def main(original_dir, genomes_dir, test_real_dir, ref_pos_dir, ref_neg_dir, csv_file, rds_file):
     if not os.path.exists(test_real_dir):
         os.makedirs(test_real_dir)
     if not os.path.exists(ref_pos_dir):
@@ -177,7 +161,6 @@ def main(original_dir, genomes_dir, test_real_dir, ref_pos_dir, ref_neg_dir, csv
     move_real_test_refs(genomes_dir, test_real_dir)  # means .fasta files
 
     download_ref_pos(ref_pos_dir)
-    combine_rds_files(rds_file1, rds_file2, rds_file)
     download_ref_neg(ref_neg_dir, rds_file)
 
 

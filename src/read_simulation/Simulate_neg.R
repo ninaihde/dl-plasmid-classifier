@@ -58,8 +58,8 @@ FilenamePostfixPattern <- "_"     # chr:     fname = id_suffix.fasta
 
 HomeFolder <- "/hpi/fs00/share/fg/renard/nina.ihde/"
 ProjectFolder <- "data/simulation/"
-IMGFile <- "metadata_neg_ref_cleaned.rds"
-IMGFile.new <- "metadata_neg_ref_cleaned_sizes.rds"
+IMGFile <- "metadata_neg_ref.rds"
+IMGFile.new <- "metadata_neg_ref_sizes.rds"
 
 if (Do.Clean) {
 
