@@ -47,7 +47,7 @@ def clean_neg_references(ref_neg_dir, ref_pos_dir, clean_sim_threshold, ref_neg_
     print(f'{len(refs_to_remove)} of {len(ref_neg_sigs)} reads will be removed, i.e. '
           f'{len(set([t[0] for t in refs_to_remove]))} of {len(set([t[0] for t in ref_neg_sigs]))} files are affected.')
 
-    # move references to new directory by leaving out too similar records
+    # move references to new directory by leaving out too similar contigs
     for fasta_file in glob.glob(f'{ref_neg_dir}/*.fasta'):
         with open(fasta_file, 'r') as f_in, open(f'{ref_neg_dir_cleaned}/{os.path.basename(fasta_file)}', 'w') as f_out:
             for record in SeqIO.parse(f_in, 'fasta'):
@@ -61,7 +61,7 @@ def clean_pos_references(test_dir, ref_pos_dir, clean_sim_threshold, ref_pos_dir
     test_sigs = calculate_signatures(test_dir)
     ref_sigs = calculate_signatures(ref_pos_dir)
 
-    # collect plasmid references too similar to test data
+    # collect plasmid references too similar to real test data
     refs_to_remove = list()
     for ref_path, ref_hash, _ in ref_sigs:
         for test_path, test_hash, _ in test_sigs:
@@ -73,9 +73,9 @@ def clean_pos_references(test_dir, ref_pos_dir, clean_sim_threshold, ref_pos_dir
 
     # move non-similar references to new directory
     # assumes one contig per file, which is why whole file can be deleted
-    ref_names_cleaned = [sig[0] for sig in ref_sigs if sig[0] not in refs_to_remove]
-    for filename in ref_names_cleaned:
-        shutil.copyfile(filename, f'{ref_pos_dir_cleaned}/{os.path.basename(filename)}')
+    for fasta_file in glob.glob(f'{ref_pos_dir}/*.fasta'):
+        if fasta_file not in refs_to_remove:
+            shutil.copyfile(fasta_file, f'{ref_pos_dir_cleaned}/{os.path.basename(fasta_file)}')
 
 
 def split_by_similarity(signatures, split_sim_threshold, random_gen):
