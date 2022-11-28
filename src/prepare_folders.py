@@ -9,6 +9,8 @@ import click
 import glob
 import os
 import shutil
+
+import pandas as pd
 import sourmash
 import time
 
@@ -37,22 +39,39 @@ def clean_neg_references(ref_neg_dir, ref_pos_dir, clean_sim_threshold, ref_neg_
     ref_pos_sigs = calculate_signatures(ref_pos_dir)
 
     # collect chromosome references too similar to plasmid references
-    refs_to_remove = list()
+    removed_contigs = dict()
     for n_path, n_hash, n_id in ref_neg_sigs:
         for p_path, p_hash, _ in ref_pos_sigs:
-            if n_hash.similarity(p_hash, downsample=True) >= clean_sim_threshold:
-                refs_to_remove.append((n_path, n_id))
+            sim = n_hash.similarity(p_hash, downsample=True)
+            if sim >= clean_sim_threshold:
+                removed_contigs[(n_path, n_id)] = sim
                 break
 
-    print(f'{len(refs_to_remove)} of {len(ref_neg_sigs)} reads will be removed, i.e. '
-          f'{len(set([t[0] for t in refs_to_remove]))} of {len(set([t[0] for t in ref_neg_sigs]))} files are affected.')
+    print(f'{len(removed_contigs)} of {len(ref_neg_sigs)} contigs will be removed')
 
     # move references to new directory by leaving out too similar contigs
+    removed_contigs_df = pd.DataFrame(columns=['File', 'Contig', 'Length', 'Similarity'])
     for fasta_file in glob.glob(f'{ref_neg_dir}/*.fasta'):
+        is_filled = False
         with open(fasta_file, 'r') as f_in, open(f'{ref_neg_dir_cleaned}/{os.path.basename(fasta_file)}', 'w') as f_out:
             for record in SeqIO.parse(f_in, 'fasta'):
-                if (fasta_file, record.id) not in refs_to_remove:
+                if (fasta_file, record.id) not in removed_contigs:
+                    # write kept contigs to new file
+                    is_filled = True
                     SeqIO.write(record, f_out, 'fasta')
+                else:
+                    # collect properties of removed contigs for later analysis
+                    removed_contigs_df = pd.concat(
+                        [removed_contigs_df, pd.DataFrame([{'File': os.path.basename(fasta_file),
+                                                            'Contig': record.id,
+                                                            'Length': len(record.seq),
+                                                            'Similarity': removed_contigs[(fasta_file, record.id)]}])],
+                        ignore_index=True)
+        if not is_filled:
+            print(f'Warning: All contigs in {os.path.basename(fasta_file)} were removed.')
+            os.remove(f'{ref_neg_dir_cleaned}/{os.path.basename(fasta_file)}')
+
+    removed_contigs_df.to_csv(f'{ref_neg_dir}/removed_contigs.csv', index=False)
 
 
 def clean_pos_references(test_dir, ref_pos_dir, clean_sim_threshold, ref_pos_dir_cleaned):
@@ -93,6 +112,7 @@ def split_by_similarity(signatures, split_sim_threshold, random_gen):
             if sim >= split_sim_threshold:
                 is_sim = True
                 if sim != 1.0:
+                    # if plasmids are not identical, add to train set
                     if signatures[idx2][0] not in train:
                         train.append(signatures[idx2][0])
                 else:
@@ -102,20 +122,21 @@ def split_by_similarity(signatures, split_sim_threshold, random_gen):
         # if at least one plasmid (idx2) is similar to current plasmid (idx), add current plasmid to train
         if is_sim and signatures[idx][0] not in train:
             train.append(signatures[idx][0])
-        # if no plasmid is similar to current plasmid, add current plasmid to test_val
+        # if no plasmid (idx2) is similar to current plasmid (idx), add current plasmid to test_val
         elif signatures[idx][0] not in train and signatures[idx][0] not in test_val:
             test_val.append(signatures[idx][0])
+
+    # remove all plasmids from train set that should be skipped but were added to train set beforehand
+    train = [p for p in train if p not in skip_list]
 
     # cut test_val in half (to extract validation and test data paths)
     val = random_gen.choice(test_val, size=int(len(test_val) / 2), replace=False)
     test = [path for path in test_val if path not in val]
 
-    print(f'Skipped: {len(skip_list)}')  # 2.920
-    print(f'Skipped but already in train: {len(set(skip_list).intersection(train))}')  # 2.537
-
-    print(f'Training   dataset: {len(train)} / {len(signatures)}')  # 23.168
-    print(f'Validation dataset: {len(val)}   / {len(signatures)}')  # 5.409
-    print(f'Test       dataset: {len(test)}  / {len(signatures)}')  # 5.410
+    print(f'Skipped plasmids:   {len(skip_list)} / {len(signatures)}')
+    print(f'Training dataset:   {len(train)}     / {len(signatures)}')
+    print(f'Validation dataset: {len(val)}       / {len(signatures)}')
+    print(f'Test dataset:       {len(test)}      / {len(signatures)}')
     return train, val, test
 
 
@@ -148,7 +169,7 @@ def split_pos_references(ref_pos_dir_cleaned, split_sim_threshold, random_gen, t
               help='directory for validation references of positive class')
 @click.option('--test_ref_pos', '-test', type=click.Path(), required=True,
               help='directory for test references of positive class')
-@click.option('--clean_sim_threshold', '-ct', default=0.9,
+@click.option('--clean_sim_threshold', '-ct', default=0.95,
               help='threshold for sequence similarity score taken in cleaning procedures of references')
 @click.option('--split_sim_threshold', '-st', default=0.4,
               help='threshold for sequence similarity score taken in splitting procedure of positive references')

@@ -27,9 +27,9 @@ def split_randomly(paths, train_percentage, val_percentage, random_gen):
     val = random_gen.choice([p for p in paths if p not in train], size=int(len(paths) * val_percentage), replace=False)
     test = [p for p in paths if p not in train and p not in val]
 
-    print(f'Training   dataset: {len(train)} / {len(paths)}')
+    print(f'Training dataset:   {len(train)} / {len(paths)}')
     print(f'Validation dataset: {len(val)}   / {len(paths)}')
-    print(f'Test       dataset: {len(test)}  / {len(paths)}')
+    print(f'Test dataset:       {len(test)}  / {len(paths)}')
     return train, val, test
 
 
