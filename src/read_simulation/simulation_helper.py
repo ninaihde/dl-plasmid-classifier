@@ -61,7 +61,7 @@ def create_rds_file(train_ref_pos, val_ref_pos, test_ref_pos):
     return rds
 
 
-def update_rds_file(chr_rds_path):
+def adjust_rds_file(chr_rds_path):
     rds = pyreadr.read_r(chr_rds_path)[None]
     rds['fold1'] = 'train'
     rds['Pathogenic'] = False
@@ -116,7 +116,7 @@ def main(ref_neg_cleaned, train_ref_pos, val_ref_pos, test_ref_pos, min_seq_len,
     pyreadr.write_rds(plasmid_rds_path, plasmid_rds_data)
 
     # 4. update RDS file of negative class
-    chr_rds_data = update_rds_file(chr_rds_path)
+    chr_rds_data = adjust_rds_file(chr_rds_path)
     pyreadr.write_rds(f'{os.path.dirname(chr_rds_path)}/metadata_neg_ref.rds', chr_rds_data)
 
 
