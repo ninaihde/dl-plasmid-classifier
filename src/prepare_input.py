@@ -20,6 +20,8 @@ import urllib.error
 import wget
 
 from Bio import SeqIO
+from datetime import datetime
+from numpy import random
 
 
 def move_real_test_reads(original_dir, test_dir):
@@ -83,6 +85,94 @@ def move_real_test_refs(genomes_dir, test_real_dir):
             shutil.copyfile(file, f'{test_real_dir}/{os.path.basename(file)}')
 
 
+def get_completeness_nr(assembly_level):
+    if assembly_level == 'Complete Genome':
+        return 4
+    elif assembly_level == 'Chromosome':
+        return 3
+    elif assembly_level == 'Scaffold':
+        return 2
+    elif assembly_level == 'Contig':
+        return 1
+    else:
+        raise ValueError(f'Non-valid assembly level: {assembly_level}!')
+
+
+def update_rds(genbank, path, rds_data, random_gen):
+    species = rds_data[rds_data['ftp_path'] == path].iloc[0]['Species']
+    species_genomes = genbank[genbank['organism_name'] == species].reset_index(drop=True)
+
+    # get updated path
+    if not species_genomes[species_genomes['refseq_category'] != 'na'].empty:
+        print('Representative exists')
+        updated_path = species_genomes[species_genomes['refseq_category'] != 'na'].iloc[0]['ftp_path']
+    else:
+        print('Representative does not exist')
+        # add numerical genome completeness
+        species_genomes['completeness_nr'] = species_genomes['assembly_level'].apply(lambda l: get_completeness_nr(l))
+        # get most complete ones
+        most_complete = species_genomes[species_genomes['completeness_nr'] == species_genomes['completeness_nr'].max()]
+        # select randomly among most complete ones
+        updated_path = most_complete.sample(n=1, random_state=random_gen).iloc[0]['ftp_path']
+
+    # keep ftp-prefix for consistency
+    updated_path = updated_path.replace('https://', 'ftp://')
+
+    # set updated path
+    print(f'Updated path for {species}: {updated_path}')
+    rds_data.loc[rds_data['Species'] == species, ['ftp_path']] = updated_path
+
+    return updated_path, rds_data
+
+
+def download_ref_neg(ref_neg_dir, rds_file, random_gen):
+    rds_data = pyreadr.read_r(rds_file)[None]
+    rds_data['ftp_path'] = rds_data['ftp_path'].astype(str)
+    ftp_paths = rds_data['ftp_path'].tolist()
+
+    # get genbank data for potential failed downloads aka outdated ftp paths
+    genbank_path = f'{ref_neg_dir}/genbank_{datetime.today().strftime("%Y_%m_%d")}.txt'
+    if not any(fname.startswith('genbank_') for fname in os.listdir(ref_neg_dir)):
+        wget.download('https://ftp.ncbi.nlm.nih.gov/genomes/genbank/assembly_summary_genbank.txt', out=genbank_path)
+    genbank = pd.read_csv(genbank_path, sep='\t', skiprows=[0])
+    genbank.rename(columns={'# assembly_accession': 'assembly_accession'}, inplace=True)
+
+    successful_downloads = 0
+    failed_downloads = 0
+    for folder_path in ftp_paths:
+        try:
+            # try to download compressed reference
+            wget.download(f'{folder_path}/{os.path.basename(folder_path)}_genomic.fna.gz',
+                          out=f'{ref_neg_dir}/{os.path.basename(folder_path)}.fna.gz')
+            successful_downloads += 1
+        except urllib.error.URLError:
+            # if download fails, update path and RDS data
+            print(f'{os.path.basename(folder_path)}_genomic.fna.gz not found')
+            failed_downloads += 1
+            folder_path, rds_data = update_rds(genbank, folder_path, rds_data, random_gen)
+
+            # download updated compressed reference
+            wget.download(f'{folder_path}/{os.path.basename(folder_path)}_genomic.fna.gz',
+                          out=f'{ref_neg_dir}/{os.path.basename(folder_path)}.fna.gz')
+
+        # decompress and write all records to new .fasta file
+        with gzip.open(f'{ref_neg_dir}/{os.path.basename(folder_path)}.fna.gz', 'rt') as f_in:
+            with open(f'{ref_neg_dir}/{os.path.basename(folder_path)}.fasta', 'w') as f_out:
+                for record in SeqIO.parse(f_in, 'fasta'):
+                    r = SeqIO.write(record, f_out, 'fasta')
+                    if r != 1:
+                        print(f'Error while writing sequence {record.id} from genome {os.path.basename(folder_path)}')
+
+        # remove compressed reference
+        os.remove(f'{ref_neg_dir}/{os.path.basename(folder_path)}.fna.gz')
+
+    # save updated RDS if at least one path was updated
+    if failed_downloads > 0:
+        pyreadr.write_rds(f'{rds_file[:-4]}_updated.rds', rds_data)
+
+    print(f'Replaced {failed_downloads} of {successful_downloads + failed_downloads} URLs in RDS file')
+
+
 def download_ref_pos(ref_pos_dir):
     wget.download('https://ccb-microbe.cs.uni-saarland.de/plsdb/plasmids/download/plsdb.fna.bz2',
                   out=f'{ref_pos_dir}/ref_pos.fna.bz2')
@@ -102,37 +192,6 @@ def download_ref_pos(ref_pos_dir):
     os.remove(f'{ref_pos_dir}/ref_pos.fna.bz2')
 
 
-def download_ref_neg(ref_neg_dir, rds_file):
-    rds_data = pyreadr.read_r(rds_file)[None]  # get pandas DataFrame with [None]
-    ftp_paths = rds_data['ftp_path'].tolist()
-
-    successful_downloads = 0
-    failed_downloads = 0
-    for folder_path in ftp_paths:
-        try:
-            # download each compressed reference
-            wget.download(f'{folder_path}/{os.path.basename(folder_path)}_genomic.fna.gz',
-                          out=f'{ref_neg_dir}/{os.path.basename(folder_path)}.fna.gz')
-            successful_downloads += 1
-        except urllib.error.URLError as e:
-            print(f'{e}: {os.path.basename(folder_path)}_genomic.fna.gz not found')
-            failed_downloads += 1
-            continue
-
-        # decompress and write all records to new .fasta file
-        with gzip.open(f'{ref_neg_dir}/{os.path.basename(folder_path)}.fna.gz', 'rt') as f_in:
-            with open(f'{ref_neg_dir}/{os.path.basename(folder_path)}.fasta', 'w') as f_out:
-                for record in SeqIO.parse(f_in, 'fasta'):
-                    r = SeqIO.write(record, f_out, 'fasta')
-                    if r != 1:
-                        print(f'Error while writing sequence {record.id} from genome {os.path.basename(folder_path)}')
-
-        # remove compressed reference
-        os.remove(f'{ref_neg_dir}/{os.path.basename(folder_path)}.fna.gz')
-
-    print(f'\nSuccessful downloads: {successful_downloads} \nFailed downloads: {failed_downloads}')
-
-
 @click.command()
 @click.option('--original_dir', '-o', type=click.Path(exists=True), required=True,
               help='directory containing real .fast5 data by RKI')
@@ -148,7 +207,8 @@ def download_ref_neg(ref_neg_dir, rds_file):
               help='path to CSV file containing read IDs of the new real .fasta data divided by class')
 @click.option('--rds_file', '-r', type=click.Path(exists=True), required=True,
               help='path to RDS file of the negative references (from 2018)')
-def main(original_dir, genomes_dir, test_real_dir, ref_pos_dir, ref_neg_dir, csv_file, rds_file):
+@click.option('--random_seed', '-s', default=42, help='seed for random operations')
+def main(original_dir, genomes_dir, test_real_dir, ref_pos_dir, ref_neg_dir, csv_file, rds_file, random_seed):
     if not os.path.exists(test_real_dir):
         os.makedirs(test_real_dir)
     if not os.path.exists(ref_pos_dir):
@@ -156,12 +216,17 @@ def main(original_dir, genomes_dir, test_real_dir, ref_pos_dir, ref_neg_dir, csv
     if not os.path.exists(ref_neg_dir):
         os.makedirs(ref_neg_dir)
 
+    print('Moving real test files to simulation directory...')
     move_real_test_reads(original_dir, test_real_dir)  # means .fast5 files
     classify_real_test_refs(csv_file, genomes_dir)
     move_real_test_refs(genomes_dir, test_real_dir)  # means .fasta files
 
+    print('\nDownloading negative references...')
+    random_gen = random.default_rng(random_seed)
+    download_ref_neg(ref_neg_dir, rds_file, random_gen)
+
+    print('\nDownloading positive references...')
     download_ref_pos(ref_pos_dir)
-    download_ref_neg(ref_neg_dir, rds_file)
 
 
 if __name__ == '__main__':
