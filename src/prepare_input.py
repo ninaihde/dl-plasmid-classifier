@@ -4,7 +4,7 @@ This script prepares all needed inputs for prepare_folders.py. I.e., it moves al
 folders (with the label in all filenames). Additionally, it downloads all references needed for simulation and saves
 them in the correct data format (.fasta). The content of this script is separated from prepare_folders.py because each
 researcher will have its own data resources and thus e.g. its own downloading procedure needed to create the input data
-for prepare_folders.py.
+for prepare_folders.py. After running this script, check_megaplasmids.py can be executed to filter out invalid plasmids.
 """
 
 import bz2

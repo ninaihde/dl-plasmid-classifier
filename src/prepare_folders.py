@@ -1,8 +1,10 @@
 """
 PREPROCESSING STEP 2/3
 This script cleans the reference data of both classes. In addition, it splits the plasmid references it into training,
-validation and test data based on the Jaccard similarity score, as we want to generalize our approach for plasmids.
-Afterwards, the simulation can be executed which is followed by prepare_tensors.py.
+validation and test data based on the Jaccard similarity score, as we want to generalize our approach for plasmids. We
+analyzed the produced removed_contigs.csv with check_contig_cleaning.ipynb but found the same megaplasmids like in
+check_megaplasmids.py and no suspicious assemblies. After this script, the simulation can be executed which is followed
+by prepare_tensors.py.
 """
 
 import click
@@ -23,7 +25,7 @@ def calculate_signatures(input_dir):
 
     for fasta_file in glob.glob(f'{input_dir}/*.fasta'):
         with open(fasta_file, 'r') as f:
-            for idx, record in enumerate(SeqIO.parse(f, 'fasta')):
+            for record in SeqIO.parse(f, 'fasta'):
                 mh = sourmash.MinHash(n=0, ksize=31, scaled=100)
                 mh.add_sequence(str(record.seq), force=True)
                 # add triple (file path, hash, record ID) to list
@@ -44,13 +46,13 @@ def clean_neg_references(ref_neg_dir, ref_pos_dir, clean_sim_threshold, ref_neg_
         for p_path, p_hash, _ in ref_pos_sigs:
             sim = n_hash.similarity(p_hash, downsample=True)
             if sim >= clean_sim_threshold:
-                removed_contigs[(n_path, n_id)] = sim
+                removed_contigs[(n_path, n_id)] = (sim, os.path.basename(p_path))
                 break
 
     print(f'{len(removed_contigs)} of {len(ref_neg_sigs)} contigs will be removed')
 
     # move references to new directory by leaving out too similar contigs
-    removed_contigs_df = pd.DataFrame(columns=['File', 'Contig', 'Length', 'Similarity'])
+    removed_contigs_df = pd.DataFrame(columns=['File', 'Contig', 'Length', 'Similarity', 'Plasmid'])
     for fasta_file in glob.glob(f'{ref_neg_dir}/*.fasta'):
         is_filled = False
         with open(fasta_file, 'r') as f_in, open(f'{ref_neg_dir_cleaned}/{os.path.basename(fasta_file)}', 'w') as f_out:
@@ -58,14 +60,17 @@ def clean_neg_references(ref_neg_dir, ref_pos_dir, clean_sim_threshold, ref_neg_
                 if (fasta_file, record.id) not in removed_contigs:
                     # write kept contigs to new file
                     is_filled = True
-                    SeqIO.write(record, f_out, 'fasta')
+                    r = SeqIO.write(record, f_out, 'fasta')
+                    if r != 1:
+                        print(f'Error while writing contig {record.id} in file {fasta_file}')
                 else:
                     # collect properties of removed contigs for later analysis
                     removed_contigs_df = pd.concat(
-                        [removed_contigs_df, pd.DataFrame([{'File': os.path.basename(fasta_file),
+                        [removed_contigs_df, pd.DataFrame([{'Species': os.path.basename(fasta_file),
                                                             'Contig': record.id,
-                                                            'Length': len(record.seq),
-                                                            'Similarity': removed_contigs[(fasta_file, record.id)]}])],
+                                                            'Contig Length': len(record.seq),
+                                                            'Similarity': removed_contigs[(fasta_file, record.id)][0],
+                                                            'Plasmid': removed_contigs[(fasta_file, record.id)][1]}])],
                         ignore_index=True)
         if not is_filled:
             print(f'Warning: All contigs in {os.path.basename(fasta_file)} were removed.')
@@ -83,7 +88,7 @@ def clean_pos_references(test_dir, ref_pos_dir, clean_sim_threshold, ref_pos_dir
     # collect plasmid references too similar to real test data
     refs_to_remove = list()
     for ref_path, ref_hash, _ in ref_sigs:
-        for test_path, test_hash, _ in test_sigs:
+        for _, test_hash, _ in test_sigs:
             if ref_hash.similarity(test_hash, downsample=True) >= clean_sim_threshold:
                 refs_to_remove.append(ref_path)
                 break
@@ -169,7 +174,7 @@ def split_pos_references(ref_pos_dir_cleaned, split_sim_threshold, random_gen, t
               help='directory for validation references of positive class')
 @click.option('--test_ref_pos', '-test', type=click.Path(), required=True,
               help='directory for test references of positive class')
-@click.option('--clean_sim_threshold', '-ct', default=0.95,
+@click.option('--clean_sim_threshold', '-ct', default=0.9,
               help='threshold for sequence similarity score taken in cleaning procedures of references')
 @click.option('--split_sim_threshold', '-st', default=0.4,
               help='threshold for sequence similarity score taken in splitting procedure of positive references')
