@@ -418,28 +418,28 @@ echo "Finished generate the simulated signals and fast5 files!"
 
 #--------- calculate accuracy ----------#
 # check result
-echo "Checking the read accuracy..."
-if [ $BASE_CALLER -eq 3 ]
-then
-	cat $FILENAME/fastq/workspace/pass/*.fastq > $FILENAME/pass.fastq 2>$FILENAME/err
-	cat $FILENAME/fastq/workspace/fail/*.fastq > $FILENAME/fail.fastq 2>$FILENAME/err
-else
-	cat $FILENAME/fastq/*.fastq > $FILENAME/pass.fastq 2>$FILENAME/err
-	touch $FILENAME/fail.fastq
-fi
-pass_num=`grep "^@" $FILENAME/pass.fastq | wc | awk '{print $1}'`
-fail_num=`grep "^@" $FILENAME/fail.fastq | wc | awk '{print $1}'`
-cat $FILENAME/pass.fastq $FILENAME/fail.fastq > $FILENAME/test.fastq
-$home/util/minimap2 -Hk19 -t $THREAD_NUM -c $FULLFILE \
-	$FILENAME/test.fastq 1> $FILENAME/mapping.paf 2> $FILENAME/err
-rm -f $FILENAME/err
-accuracy=`awk 'BEGIN{a=0;b=0}{a+=$10/$11;b++}END{print a/b}' $FILENAME/mapping.paf`
-totalnum=`grep "^@" $FILENAME/test.fastq | wc | awk '{print $1}'`
-echo "Here is the mapping identity: $accuracy of $totalnum (pass $pass_num + fail $fail_num) reads passed base-calling."
-echo "$accuracy $totalnum $pass_num $fail_num" > $FILENAME/accuracy
+#echo "Checking the read accuracy..."
+#if [ $BASE_CALLER -eq 3 ]
+#then
+#	cat $FILENAME/fastq/workspace/pass/*.fastq > $FILENAME/pass.fastq 2>$FILENAME/err
+#	cat $FILENAME/fastq/workspace/fail/*.fastq > $FILENAME/fail.fastq 2>$FILENAME/err
+#else
+#	cat $FILENAME/fastq/*.fastq > $FILENAME/pass.fastq 2>$FILENAME/err
+#	touch $FILENAME/fail.fastq
+#fi
+#pass_num=`grep "^@" $FILENAME/pass.fastq | wc | awk '{print $1}'`
+#fail_num=`grep "^@" $FILENAME/fail.fastq | wc | awk '{print $1}'`
+#cat $FILENAME/pass.fastq $FILENAME/fail.fastq > $FILENAME/test.fastq
+#$home/util/minimap2 -Hk19 -t $THREAD_NUM -c $FULLFILE \
+#	$FILENAME/test.fastq 1> $FILENAME/mapping.paf 2> $FILENAME/err
+#rm -f $FILENAME/err
+#accuracy=`awk 'BEGIN{a=0;b=0}{a+=$10/$11;b++}END{print a/b}' $FILENAME/mapping.paf`
+#totalnum=`grep "^@" $FILENAME/test.fastq | wc | awk '{print $1}'`
+#echo "Here is the mapping identity: $accuracy of $totalnum (pass $pass_num + fail $fail_num) reads passed base-calling."
+#echo "$accuracy $totalnum $pass_num $fail_num" > $FILENAME/accuracy
 # remove temporary files
-rm -rf $FILENAME/fastq
-rm -f $FILENAME/test.fastq
+#rm -rf $FILENAME/fastq
+#rm -f $FILENAME/test.fastq
 
 #---------- exit -----------#
 exit 0
