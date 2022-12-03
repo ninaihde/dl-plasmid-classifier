@@ -115,12 +115,14 @@ def update_rds(genbank, path, rds_data, random_gen):
         # select randomly among most complete ones
         updated_path = most_complete.sample(n=1, random_state=random_gen).iloc[0]['ftp_path']
 
-    # keep ftp-prefix for consistency
+    # keep ftp-prefix for consistency and get assembly accession
     updated_path = updated_path.replace('https://', 'ftp://')
+    updated_assembly_accession = "_".join(os.path.basename(updated_path).split('_')[:2])
 
-    # set updated path
+    # set updated path and assembly accession
     print(f'Updated path for {species}: {updated_path}')
     rds_data.loc[rds_data['Species'] == species, ['ftp_path']] = updated_path
+    rds_data.loc[rds_data['Species'] == species, ['assembly_accession']] = updated_assembly_accession
 
     return updated_path, rds_data
 

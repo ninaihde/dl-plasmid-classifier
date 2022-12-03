@@ -135,20 +135,8 @@ def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real
     start_time = time.time()
     random_gen = random.default_rng(random_seed)
 
-    if not os.path.exists(train_sim_neg):
-        os.makedirs(train_sim_neg)
-    if not os.path.exists(val_sim_neg):
-        os.makedirs(val_sim_neg)
-    if not os.path.exists(test_sim_neg):
-        os.makedirs(test_sim_neg)
     split_neg_reads(sim_neg, train_pct, val_pct, random_gen, train_sim_neg, val_sim_neg, test_sim_neg)
-
-    if not os.path.exists(test_sim):
-        os.makedirs(test_sim)
     combine_folders(test_sim, test_sim_neg, test_sim_pos)
-
-    if not os.path.exists(test_sim_real):
-        os.makedirs(test_sim_real)
     combine_folders(test_sim_real, test_sim_real_neg, test_sim_real_pos)
 
     if not os.path.exists(out_dir):
