@@ -3,7 +3,10 @@
 
 source("src/read_simulation/SimulationWrapper.R")
 
-Workers <- 2
+# inspired by https://stackoverflow.com/questions/13116099/traceback-for-interactive-and-non-interactive-r-sessions/13119318#13119318
+options(error=function()traceback(2))
+
+Workers <- 4
 
 Do.TrainingData <- T
 Do.ValidationData <- F
@@ -29,7 +32,7 @@ MeanFragmentSize <- 8000
 FragmentStdDev <- 0
 ReadMargin <- 0
 
-TotalTrainingReadNumber <- 25e06  # TODO
+TotalTrainingReadNumber <- 25e06
 TotalValidationReadNumber <- 0
 TotalTestReadNumber <- 0
 Proportional2GenomeSize <- T

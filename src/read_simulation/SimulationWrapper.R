@@ -28,7 +28,7 @@ Simulate.Reads <- function(DeepSimDir=NULL, InputFastaFile=NULL, ReadCoverage=NU
 
     InputFileExtension <- tools::file_ext(tail(strsplit(InputFastaFile,"/")[[1]], 1))
 
-    PathPrefix <- file.path(TargetDirectory,paste0(FilePrefix))
+    PathPrefix <- file.path(TargetDirectory, paste0(FilePrefix))
     if (AllowNsFromGenome) {
         aNg.option <- "-aNg"
     } else {
@@ -165,19 +165,35 @@ Simulate.Reads <- function(DeepSimDir=NULL, InputFastaFile=NULL, ReadCoverage=NU
 	    if (!dir.exists(temp_folder_split)) {
 		    dir.create(temp_folder_split)
         }
-	    fasta_folder_split <- file.path(temp_folder_split, basename(InputFastaFile),"")
+	    fasta_folder_split <- file.path(temp_folder_split, basename(InputFastaFile), "")
 	    dir.create(fasta_folder_split)
-        system(paste0("bioawk -cfastx '{print \">\"$name \" \" $comment \"\\n\" $seq > (", "\"", fasta_folder_split ,"\"", "$name\".fasta\")}' ", InputFastaFile))
+
+        # check if enough files can be opened - if not, stop program and recommd new ulimit size
+        num_contigs <- as.numeric(system(paste0("grep -c '^>' ", InputFastaFile), intern=T))
+        linux_user <- system("whoami", intern=T)
+        num_open_files <- as.numeric(system(paste0("lsof -u ", linux_user, " | wc -l"), intern=T))
+        max_open_files <- as.numeric(system("ulimit -n", intern=T))
+        if (num_contigs >= (max_open_files - num_open_files)) {
+            stop(paste("More files than allowed need to be openend. Set 'ulimit -n' at least to", num_contigs + num_open_files, "\n"))
+        }
+        system(paste0("bioawk -cfastx '{print \">\"$name \" \" $comment \"\\n\" $seq > (", "\"", fasta_folder_split, "\"", "$name\".fasta\")}' ", InputFastaFile))
+
 	    # simulate reads (output from the contigs is combined into one fasta again)
 	    output_fasta <- file.path(TargetDirectory, basename(InputFastaFile))
 	    file.create(output_fasta)
+        cat(paste0("output_fasta: ", output_fasta, "\n"))  # debug
 	    total_seq_length <- as.numeric(system(paste("bioawk -cfastx 'BEGIN{ seq_length = 0} {seq_length += length($seq)} END{print seq_length}'", InputFastaFile), intern=T))
-	    for(file in list.files(fasta_folder_split, full.names=T)) {
+
+	    for (file in list.files(fasta_folder_split, full.names=T)) {
+            cat(paste0("file: ", file, "\n"))  # debug
 		    seq_length <- as.numeric(system(paste("bioawk -cfastx '{print length($seq)}'", file), intern=T))
 		    read_numb <- seq_length/total_seq_length * ReadNumber
 		    output <- file.path(TargetDirectory, paste0(basename(InputFastaFile), "_", basename(file)))
-		    system(paste(DeepSimDir + "/deep_simulator -i", file, "-n", round(read_numb), "-l", ReadLength, "-o", output, "-c 14", "-H", DeepSimDir, "-S 1"))
+            deepsim_call <- paste0(DeepSimDir, "/deep_simulator.sh -i ", file, " -n ", round(read_numb), " -l ", ReadLength, " -o ", output, " -c 16", " -H ", DeepSimDir, " -S 1")
+		    deepsim_output <- system(deepsim_call, intern=TRUE)
+            cat(paste0("DeepSimulator output: ", deepsim_output, "\n"))  # debug
 		    system(paste("cat", file.path(output, "pass.fastq"), ">>", output_fasta))
+            cat("Result FASTA filled \n")  # debug
 		    # if uncommented, only the sequence is kept, other info like current signal is deleted
             #system(paste("rm -r ", output))
         }
