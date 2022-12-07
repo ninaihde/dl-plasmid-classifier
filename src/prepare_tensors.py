@@ -22,6 +22,13 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 from scipy import stats
 
 
+def merge_simulated_reads(sim_neg_dir):
+    sim_reads = glob.glob(f'{sim_neg_dir}/negative/*.fasta/fast5/*.fast5')
+
+    for sim_read in sim_reads:
+        shutil.copyfile(sim_read, f'{sim_neg_dir}/{os.path.basename(sim_read)}')
+
+
 def split_randomly(paths, train_percentage, val_percentage, random_gen):
     train = random_gen.choice(paths, size=int(len(paths) * train_percentage), replace=False)
     val = random_gen.choice([p for p in paths if p not in train], size=int(len(paths) * val_percentage), replace=False)
@@ -134,6 +141,8 @@ def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real
          random_seed, batch_size, train_pct, val_pct):
     start_time = time.time()
     random_gen = random.default_rng(random_seed)
+
+    merge_simulated_reads(sim_neg)
 
     split_neg_reads(sim_neg, train_pct, val_pct, random_gen, train_sim_neg, val_sim_neg, test_sim_neg)
     combine_folders(test_sim, test_sim_neg, test_sim_pos)
