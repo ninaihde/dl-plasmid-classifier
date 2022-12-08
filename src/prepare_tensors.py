@@ -22,11 +22,11 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 from scipy import stats
 
 
-def merge_simulated_reads(sim_neg_dir):
-    sim_reads = glob.glob(f'{sim_neg_dir}/negative/*.fasta/fast5/*.fast5')
+def merge_simulated_reads(sim_dir, class_type):
+    sim_reads = glob.glob(f'{sim_dir}/{class_type}/*.fasta/fast5/*.fast5')
 
     for sim_read in sim_reads:
-        shutil.copyfile(sim_read, f'{sim_neg_dir}/{os.path.basename(sim_read)}')
+        shutil.copyfile(sim_read, f'{sim_dir}/{os.path.basename(sim_read)}')
 
 
 def split_randomly(paths, train_percentage, val_percentage, random_gen):
@@ -111,10 +111,6 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
               help='directory containing simulated test data for positive class (.fast5)')
 @click.option('--test_sim', type=click.Path(), required=True,
               help='directory for simulated test data of both classes (.fast5)')
-@click.option('--test_sim_real_neg', type=click.Path(exists=True), required=True,
-              help='directory containing simulated real test data for negative class (.fast5)')
-@click.option('--test_sim_real_pos', type=click.Path(exists=True), required=True,
-              help='directory containing simulated real test data for positive class (.fast5)')
 @click.option('--test_sim_real', type=click.Path(), required=True,
               help='directory for simulated real test data of both classes (.fast5)')
 @click.option('--train_sim_neg', type=click.Path(), required=True,
@@ -136,17 +132,27 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
 @click.option('--batch_size', '-b', default=5000, help='batch size, set to zero to use whole dataset size')
 @click.option('--train_pct', '-t', default=0.8, help='splitting percentage for negative training reads')
 @click.option('--val_pct', '-v', default=0.1, help='splitting percentage for negative validation reads')
+@click.option('--merge_and_split', '-m', help='turn of merging of folders and splitting of negative reads as this only '
+                                              'needs to be done once after the simulation', default=False)
 def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real_neg, test_sim_real_pos, test_sim_real,
          train_sim_neg, train_sim_pos, val_sim_neg, val_sim_pos, out_dir, cutoff, min_seq_len, max_seq_len, cut_after,
-         random_seed, batch_size, train_pct, val_pct):
+         random_seed, batch_size, train_pct, val_pct, merge_and_split):
     start_time = time.time()
     random_gen = random.default_rng(random_seed)
 
-    merge_simulated_reads(sim_neg)
+    # Note: if this script is executed several times (e.g., with different -max values), merging and splitting does not
+    # need to be executed again
+    if merge_and_split:
+        # move .fast5 files from simulation subdirectories into respective super folder
+        merge_simulated_reads(sim_neg, 'negative')
+        merge_simulated_reads(train_sim_pos, 'positive')
+        merge_simulated_reads(val_sim_pos, 'positive')
+        merge_simulated_reads(test_sim_pos, 'positive')
+        merge_simulated_reads(test_sim_real, '*')
 
-    split_neg_reads(sim_neg, train_pct, val_pct, random_gen, train_sim_neg, val_sim_neg, test_sim_neg)
-    combine_folders(test_sim, test_sim_neg, test_sim_pos)
-    combine_folders(test_sim_real, test_sim_real_neg, test_sim_real_pos)
+        # split simulated reads of negative class and move simulated test data into one folder
+        split_neg_reads(sim_neg, train_pct, val_pct, random_gen, train_sim_neg, val_sim_neg, test_sim_neg)
+        combine_folders(test_sim, test_sim_neg, test_sim_pos)
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
