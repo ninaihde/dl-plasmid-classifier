@@ -192,14 +192,14 @@ Simulate.Reads <- function(DeepSimDir=NULL, InputFastaFile=NULL, ReadCoverage=NU
 		    output <- file.path(TargetDirectory, paste0(basename(InputFastaFile), "_", basename(file)))
 
             # execute DeepSimulator
-            deepsim_call <- paste0(DeepSimDir, "/deep_simulator.sh -i ", file, " -n ", round(read_numb), " -l ", ReadLength, " -o ", output, " -c 16", " -H ", DeepSimDir, " -S 1")
+            deepsim_call <- paste0(DeepSimDir, "/deep_simulator.sh -i ", file, " -n ", round(read_numb), " -l ", ReadLength, " -o ", output, " -c 64", " -H ", DeepSimDir, " -S 1")
 		    deepsim_output <- system(deepsim_call, intern=TRUE)
             cat(paste0("DeepSimulator output: ", deepsim_output, "\n"))  # debug
 
             # store base-called and successfully passed reads
 		    #system(paste("cat", file.path(output, "pass.fastq"), ">>", output_fasta))
 
-		    # if uncommented, only the sequence is kept, other info like current signal is deleted
+		    # only keep sequence, i.e., delete other info like current signal
             #system(paste("rm -r ", output))
         }
 	system(paste0("rm -r ", fasta_folder_split))
