@@ -45,7 +45,7 @@ def get_coverage(n_reads, read_length, genome_length):
 
 def append_refs(rds, ref_dir, ds_type, is_pos_class):
     for fasta_file in glob.glob(f'{ref_dir}/*.fasta'):
-        rds = pd.concat([rds, pd.DataFrame([{'assembly_accession': fasta_file.split(os.path.sep)[-1].split('.')[-2],
+        rds = pd.concat([rds, pd.DataFrame([{'assembly_accession': os.path.basename(fasta_file)[:-6],
                                              'fold1': ds_type,
                                              'Pathogenic': is_pos_class}])],
                         ignore_index=True)
