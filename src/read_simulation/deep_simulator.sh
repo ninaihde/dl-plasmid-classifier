@@ -253,7 +253,9 @@ PREALI="align"
 # we should make a tmp directory named after the input file to
 # store the tmp files
 echo "Pre-process input genome..."
-source activate tensorflow_cdpm
+cd /hpi/fs00/home/nina.ihde/miniconda3/bin
+./conda init bash
+source activate /hpi/fs00/home/nina.ihde/miniconda3/envs/tensorflow_cdpm
 python2 $home/util/genome_preprocess.py \
 	-i $FULLFILE \
 	-o $FILENAME/processed_genome \
@@ -272,7 +274,7 @@ then
 fi
 if [ $SAMPLE_NUM -gt 0 ]
 then
-	source activate tensorflow_cdpm
+	source activate /hpi/fs00/home/nina.ihde/miniconda3/envs/tensorflow_cdpm
 	for file_processed_genome in `ls $FILENAME/processed_genome*`; do
 		#statements
 		# echo ${file_processed_genome}
@@ -352,7 +354,7 @@ if [ $SIMULATOR_MODE -eq 0 ]
 then
 	echo "Running the context-dependent pore model..."
 	#-> context-dependent simulator
-	source activate tensorflow_cdpm
+	source activate /hpi/fs00/home/nina.ihde/miniconda3/envs/tensorflow_cdpm
 	export DeepSimulatorHome=$home
 	python2 $home/pore_model/src/context_simulator.py \
 		-i $FILENAME/sampled_read.fasta \
@@ -369,7 +371,7 @@ then
 else
 	echo "Running the context-independent pore model..."
 	#-> contect-independent simulator
-	source activate tensorflow_cdpm
+	source activate /hpi/fs00/home/nina.ihde/miniconda3/envs/tensorflow_cdpm
 	python2 $home/pore_model/src/kmer_simulator.py \
 		-i $FILENAME/sampled_read.fasta \
 		-p $FILENAME/signal/$PREFIX \

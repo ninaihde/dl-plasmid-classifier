@@ -6,7 +6,7 @@ source("src/read_simulation/SimulationWrapper.R")
 # inspired by https://stackoverflow.com/questions/13116099/traceback-for-interactive-and-non-interactive-r-sessions/13119318#13119318
 options(error=function()traceback(2))
 
-Workers <- 4
+Workers <- 2
 
 Do.TrainingData <- T
 Do.ValidationData <- F
@@ -46,20 +46,20 @@ do.Negative <- T
 pairedEnd <- F
 test.pairedEnd <- F
 
-DeepSimDir <- "/hpi/fs00/share/fg/renard/nina.ihde/DeepSimulator"
+DeepSimDir <- "/hpi/fs00/home/nina.ihde/ma/DeepSimulator"
 
-FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/ref_neg_cleaned"
-train.FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/ref_neg_cleaned"
+FastaFileLocation <- "/hpi/fs00/scratch/nina.ihde/ma/data/simulation/ref_neg_cleaned"
+train.FastaFileLocation <- "/hpi/fs00/scratch/nina.ihde/ma/data/simulation/ref_neg_cleaned"
 val.FastaFileLocation <- ""
 test.FastaFileLocation <- ""
-TrainingTargetDirectory <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/sim_neg"
+TrainingTargetDirectory <- "/hpi/fs00/scratch/nina.ihde/ma/data/simulation/sim_neg"
 ValidationTargetDirectory <- ""
 TestTargetDirectory <- ""
 FastaExtension <- "fasta"
 FilenamePostfixPattern <- "_"     # chr:     fname = id_suffix.fasta
 #FilenamePostfixPattern <- "\\."  # plasmid: fname = id.fasta
 
-HomeFolder <- "/hpi/fs00/share/fg/renard/nina.ihde/"
+HomeFolder <- "/hpi/fs00/scratch/nina.ihde/ma/"
 ProjectFolder <- "data/simulation/"
 IMGFile <- "metadata_neg_ref.rds"
 IMGFile.new <- "metadata_neg_ref_sizes.rds"

@@ -6,7 +6,7 @@ source("src/read_simulation/SimulationWrapper.R")
 # inspired by https://stackoverflow.com/questions/13116099/traceback-for-interactive-and-non-interactive-r-sessions/13119318#13119318
 options(error=function()traceback(2))
 
-Workers <- 4
+Workers <- 2
 
 Do.TrainingData <- T
 Do.ValidationData <- T
@@ -46,20 +46,20 @@ do.Negative <- F
 pairedEnd <- F
 test.pairedEnd <- F
 
-DeepSimDir <- "/hpi/fs00/share/fg/renard/nina.ihde/DeepSimulator"
+DeepSimDir <- "/hpi/fs00/home/nina.ihde/ma/DeepSimulator"
 
-FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/trainval_ref_pos"
-train.FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/trainval_ref_pos/train_ref_pos"
-val.FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/trainval_ref_pos/val_ref_pos"
-test.FastaFileLocation <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/test_ref_pos"
-TrainingTargetDirectory <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/train_sim_pos"
-ValidationTargetDirectory <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/val_sim_pos"
-TestTargetDirectory <- "/hpi/fs00/share/fg/renard/nina.ihde/data/simulation/test_sim_pos"
+FastaFileLocation <- "/hpi/fs00/scratch/nina.ihde/ma/data/simulation/trainval_ref_pos"
+train.FastaFileLocation <- "/hpi/fs00/scratch/nina.ihde/ma/data/simulation/trainval_ref_pos/train_ref_pos"
+val.FastaFileLocation <- "/hpi/fs00/scratch/nina.ihde/ma/data/simulation/trainval_ref_pos/val_ref_pos"
+test.FastaFileLocation <- "/hpi/fs00/scratch/nina.ihde/ma/data/simulation/test_ref_pos"
+TrainingTargetDirectory <- "/hpi/fs00/scratch/nina.ihde/ma/data/simulation/train_sim_pos"
+ValidationTargetDirectory <- "/hpi/fs00/scratch/nina.ihde/ma/data/simulation/val_sim_pos"
+TestTargetDirectory <- "/hpi/fs00/scratch/nina.ihde/ma/data/simulation/test_sim_pos"
 FastaExtension <- "fasta"
 #FilenamePostfixPattern <- "_"   # chr:     fname = id_suffix.fasta
 FilenamePostfixPattern <- "\\."  # plasmid: fname = id.fasta
 
-HomeFolder <- "/hpi/fs00/share/fg/renard/nina.ihde/"
+HomeFolder <- "/hpi/fs00/scratch/nina.ihde/ma/"
 ProjectFolder <- "data/simulation/"
 IMGFile <- "metadata_pos_ref.rds"
 IMGFile.new <- "metadata_pos_ref_sizes.rds"
