@@ -79,7 +79,7 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
 @click.option('--chr_ids', '-cid', help='file path of chromosome validation read ids', required=True,
               type=click.Path(exists=True))
 @click.option('--out_folder', '-o', help='output folder path in which logs and models are saved', required=True,
-              type=click.Path())
+              type=click.Path())  # "train_{#epochs}_{run_id}"
 @click.option('--interm', '-i', help='file path of model checkpoint (optional)', required=False,
               type=click.Path(exists=True))
 @click.option('--model_selection_criterion', '-s', default='loss', type=click.Choice(['loss', 'acc']),

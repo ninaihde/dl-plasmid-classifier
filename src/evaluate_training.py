@@ -18,7 +18,7 @@ from plot_helper import create_barplot_for_several_metrics, create_lineplot_for_
               type=click.Path(exists=True), required=True)
 @click.option('--output_results', '-or', help='path to folder where calculated results will be stored',
               type=click.Path(exists=True), required=True)
-@click.option('--prefix', '-p', help='prefix of data folders to evaluate', default='max')
+@click.option('--prefix', '-p', help='prefix of data folders to evaluate', default='final')
 @click.option('--run_id', '-r', help='identifier of runs to be evaluated', required=True)  # e.g. 'balancedLoss'
 @click.option('--model_selection_criterion', '-s', default='Loss', type=click.Choice(['Loss', 'Accuracy']),
               help='model selection criterion, choose between validation loss and accuracy')
@@ -35,7 +35,6 @@ def main(input, output_plots, output_results, prefix, run_id, model_selection_cr
                  'Validation Loss', 'TN', 'FP', 'FN', 'TP', 'Balanced Accuracy', 'F1S', 'MCC', 'Precision', 'Recall',
                  'TNR', 'FPR', 'FNR'])
 
-    # TODO: check paths
     for config_folder in [cf for cf in os.listdir(input) if cf.startswith(prefix)]:
         for train_folder in glob.glob(f'{input}/{config_folder}/train_*_{run_id}/logs/'):
             # extract logs

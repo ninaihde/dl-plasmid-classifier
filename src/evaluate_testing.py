@@ -22,7 +22,7 @@ from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, m
               type=click.Path(exists=True), required=True)
 @click.option('--output_results', '-or', help='path to folder where calculated results will be stored',
               type=click.Path(exists=True), required=True)
-@click.option('--prefix', '-p', help='prefix of data folders to evaluate', default='max')
+@click.option('--prefix', '-p', help='prefix of data folders to evaluate', default='final')
 @click.option('--run_id', '-r', help='identifier of runs to be evaluated', required=True)  # e.g. 'balancedLoss'
 def main(input_data, input_logs, output_plots, output_results, prefix, run_id):
     # create subdirectory for plots to be generated
@@ -34,7 +34,6 @@ def main(input_data, input_logs, output_plots, output_results, prefix, run_id):
         columns=['Maximum Sequence Length', 'Cutting Method', 'Number of Epochs', 'TP', 'TN', 'FP', 'FN',
                  'Accuracy', 'Balanced Accuracy', 'Precision', 'Recall', 'F1S', 'MCC'])
 
-    # TODO: check paths
     for config_folder in [cf for cf in os.listdir(input_data) if cf.startswith(prefix)]:
         gt = pd.read_csv(f'{input_data}/{config_folder}/gt_test_labels.csv')
         max_seq_len = int(config_folder.split('_')[1].replace('max', ''))

@@ -86,7 +86,7 @@ def process(reads, read_ids, batch_idx, bmodel, outpath, device):
 @click.command()
 @click.option('--model', '-m', help='input path to pre-trained model', type=click.Path(exists=True), required=True)
 @click.option('--inpath', '-i', help='input path to fast5 data', type=click.Path(exists=True), required=True)
-@click.option('--outpath', '-o', help='output path for results', type=click.Path(), required=True)
+@click.option('--outpath', '-o', help='output path for results', type=click.Path(), required=True)  # "classify_{#epochs}_{run_id}"
 @click.option('--min_seq_len', '-min', default=2000, help='minimum number of raw signals (after cutoff) used per read')
 @click.option('--max_seq_len', '-max', default=4000, help='maximum number of raw signals (after cutoff) used per read')
 @click.option('--cut_after', '-a', default=False,
