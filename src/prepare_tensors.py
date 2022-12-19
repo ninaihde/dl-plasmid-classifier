@@ -135,9 +135,9 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
 @click.option('--val_pct', '-v', default=0.1, help='splitting percentage for negative validation reads')
 @click.option('--merge_and_split', '-m', help='turn of merging of folders and splitting of negative reads as this only '
                                               'needs to be done once after the simulation', default=False)
-def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real_neg, test_sim_real_pos, test_sim_real,
-         train_sim_neg, train_sim_pos, val_sim_neg, val_sim_pos, out_dir, cutoff, min_seq_len, max_seq_len, cut_after,
-         random_seed, batch_size, train_pct, val_pct, merge_and_split):
+def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real, train_sim_neg, train_sim_pos,
+         val_sim_neg, val_sim_pos, out_dir, cutoff, min_seq_len, max_seq_len, cut_after, random_seed, batch_size,
+         train_pct, val_pct, merge_and_split):
     start_time = time.time()
     random_gen = random.default_rng(random_seed)
 
@@ -166,9 +166,8 @@ def main(sim_neg, test_real, test_sim_neg, test_sim_pos, test_sim, test_sim_real
     if batch_size == 0:
         use_single_batch = True
 
-    # TODO: add test_real if .fast5 files are existent
     # TODO: add test_sim_real if it is simulated
-    for ds_path in [test_sim, train_sim_neg, train_sim_pos, val_sim_neg, val_sim_pos]:
+    for ds_path in [test_real, test_sim, train_sim_neg, train_sim_pos, val_sim_neg, val_sim_pos]:
         ds_name = os.path.basename(ds_path)
         print(f'\nDataset: {ds_name}')
 
