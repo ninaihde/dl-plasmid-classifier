@@ -1,10 +1,10 @@
 """
-PREPROCESSING STEP 1/3
-This script prepares all needed inputs for prepare_folders.py. I.e., it moves all real test data to the respective
+PREPROCESSING STEP 1/4
+This script prepares all needed inputs for prepare_simulation.py. I.e., it moves all real test data to the respective
 folders (with the label in all filenames). Additionally, it downloads all references needed for simulation and saves
-them in the correct data format (.fasta). The content of this script is separated from prepare_folders.py because each
+them in the correct data format (.fasta). The content of this script is separated from prepare_simulation.py because each
 researcher will have its own data resources and thus e.g. its own downloading procedure needed to create the input data
-for prepare_folders.py. After running this script, check_megaplasmids.py can be executed to filter out invalid plasmids.
+for prepare_simulation.py. After running this script, check_megaplasmids.py can be executed to filter out invalid plasmids.
 """
 
 import bz2

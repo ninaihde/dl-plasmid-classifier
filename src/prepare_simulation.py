@@ -1,10 +1,10 @@
 """
-PREPROCESSING STEP 2/3
+PREPROCESSING STEP 2/4
 This script cleans the reference data of both classes. In addition, it splits the plasmid references it into training,
 validation and test data based on the Jaccard similarity score, as we want to generalize our approach for plasmids. We
 analyzed the produced removed_contigs.csv with check_contig_cleaning.ipynb but found the same megaplasmids like in
 check_megaplasmids.py and no suspicious assemblies. After this script, the simulation can be executed which is followed
-by prepare_tensors.py.
+by prepare_training.py.
 """
 
 import click

@@ -1,7 +1,7 @@
 """
 This inference procedure is an extended and adapted version of the one used in the SquiggleNet project, see
 https://github.com/welch-lab/SquiggleNet/blob/master/inference.py. In addition to the original inference procedure, this
-script performs read cutting and padding like done for the train and validation data (see prepare_tensors.py).
+script performs read cutting and padding like done for the train and validation data (see prepare_training.py).
 """
 
 import click

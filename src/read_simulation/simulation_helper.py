@@ -2,7 +2,7 @@
 This script performs all steps required to be able to execute Simulate_{class}.py. I.e., it calculates the number of
 reads per dataset of the positive class. Additionally, it checks which chromosome coverage fits best and thus which read
 number can be taken for the simulation with negative references. Lastly, the RDS file for plasmids is created and the
-one for chromosomes is cleaned.
+one for chromosomes is updated.
 """
 
 import click
