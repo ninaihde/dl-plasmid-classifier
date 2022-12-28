@@ -50,7 +50,7 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
     data = torch.tensor(data).float()
     tensor_path = f'{outpath_ds}/tensors{"" if use_single_batch else "_" + str(batch_idx)}.pt'
     torch.save(data, tensor_path)
-    print(f'Torch tensor saved: {tensor_path}')
+    #print(f'Torch tensor saved: {tensor_path}')
 
 
 @click.command()
@@ -116,7 +116,7 @@ def main(test_real, test_sim, test_sim_real, train_sim_neg, train_sim_pos, val_s
             label_df = pd.DataFrame(columns=['Read ID', 'GT Label'])
 
         for file_idx, file in enumerate(glob.glob(f'{ds_path}/*.fast5')):
-            print(f'File: {file}')
+            #print(f'File: {file}')
 
             with get_fast5_file(file, mode='r') as f5:
                 for read_idx, read in enumerate(f5.get_reads()):
