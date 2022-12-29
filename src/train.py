@@ -80,7 +80,7 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
               type=click.Path(exists=True))
 @click.option('--out_folder', '-o', help='output folder path in which logs and models are saved', required=True,
               type=click.Path())  # "train_{#epochs}_{run_id}"
-@click.option('--interm', '-i', help='file path of model checkpoint (optional)', required=False,
+@click.option('--interm', '-i', help='path to checkpoint file of pre-trained model (optional)', required=False,
               type=click.Path(exists=True))
 @click.option('--model_selection_criterion', '-s', default='loss', type=click.Choice(['loss', 'acc']),
               help='model selection criterion, choose between validation loss ("loss") and validation accuracy ("acc")')

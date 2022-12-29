@@ -1,5 +1,5 @@
 """
-This script offers functions used by both, evaluate_trainings.py and evaluate_trainings.py.
+This script offers functions used by both, evaluate_training.py and evaluate_testing.py.
 """
 
 import matplotlib.pyplot as plt

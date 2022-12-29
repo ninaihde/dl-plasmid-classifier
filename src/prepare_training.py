@@ -206,7 +206,7 @@ def main(test_real, test_sim, test_sim_real, train_sim_neg, train_sim_pos, val_s
 
         print(f'Finished dataset. Runtime passed: {time.time() - start_time} seconds')
 
-        # prepare_normalization.py several .pt files produced by multiple-batch-modus
+        # merge several .pt files produced by multiple-batch-modus
         if 'test' not in ds_name and not use_single_batch:
             print('Merging .pt files...')
             merged_tensors = torch.Tensor()
