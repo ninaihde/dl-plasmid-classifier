@@ -49,39 +49,43 @@ def get_read_ids(input_dir, threads):
     read_ids_df = pd.DataFrame({'read_id': read_ids})
     read_ids_df.to_csv(f'{input_dir}/all_ids.csv', index=False, sep='\t')
 
-    print(f'Extracted IDs: {len(read_ids)}')
+    print(f'Number of extracted IDs: {len(read_ids)}')
     return read_ids
 
 
 def create_read_id_csv(random_gen, ids_part, all_ids, percentage, name, input_dir):
-    if percentage != np.nan:
+    print(f'Randomly extracting read IDs for {name} dataset...')
+    if not np.isnan(percentage):
         selected_ids = random_gen.choice(ids_part, size=int(len(all_ids) * percentage), replace=False)
     else:
         selected_ids = ids_part
 
-    print(f'{name} dataset: {len(selected_ids)}')
     df = pd.DataFrame({'read_id': selected_ids})
     df.to_csv(f'{input_dir}/{name}_read_ids.csv', index=False, sep='\t')
+    print(f'{name}_read_ids.csv created. Number of reads: {len(selected_ids)}')
 
     return selected_ids
 
 
 def split_files(input_dir, output_dir, file_prefix, ds_type, batch_size, threads):
-    print(f'Moving negative reads to folder {os.path.basename(output_dir)}...')
-    Fast5Filter(input_folder=input_dir, output_folder=output_dir, filename_base=file_prefix,
-                read_list_file=f'{input_dir}/{ds_type}_read_ids.csv', batch_size=batch_size, threads=threads,
-                recursive=False, file_list_file=False, follow_symlinks=False, target_compression='gzip')
+    print(f'Moving negative reads to folder {output_dir}...')
+    splitter = Fast5Filter(input_folder=input_dir, output_folder=output_dir, filename_base=file_prefix,
+                           read_list_file=f'{input_dir}/{ds_type}_read_ids.csv', batch_size=batch_size, threads=threads,
+                           recursive=False, file_list_file=False, follow_symlinks=False, target_compression='gzip')
+    splitter.run_batch()
+    print(f'Reads successfully moved to {output_dir}.')
 
 
 def split_neg_reads(input_dir, train_percentage, val_percentage, random_gen, train_sim_neg, val_sim_neg, test_sim,
                     batch_size, threads, file_prefix):
     read_ids = get_read_ids(input_dir, threads)
 
-    print('Randomly splitting negative read IDs according to given percentages...')
+    # randomly splitting negative read IDs according to given percentages
     train = create_read_id_csv(random_gen, read_ids, read_ids, train_percentage, 'train', input_dir)
     val = create_read_id_csv(random_gen, list(set(read_ids) - set(train)), read_ids, val_percentage, 'val', input_dir)
     create_read_id_csv(random_gen, list(set(read_ids) - set(train) - set(val)), read_ids, np.nan, 'test', input_dir)
 
+    # move reads of each dataset to respective new folder
     split_files(input_dir, train_sim_neg, file_prefix, 'train', batch_size, threads)
     split_files(input_dir, val_sim_neg, file_prefix, 'val', batch_size, threads)
     split_files(input_dir, test_sim, file_prefix, 'test', batch_size, threads)
