@@ -3,7 +3,7 @@
 #SBATCH --job-name="install"
 #SBATCH --constraint="ARCH:X86"
 #SBATCH --mem=64G
-#SBATCH --mail-user=nina.nhde@student.hpi.uni-potsdam.de
+#SBATCH --mail-user=nina.ihde@student.hpi.uni-potsdam.de
 #SBATCH --mail-type=ALL
 #SBATCH --output="/hpi/fs00/home/nina.ihde/ma/logs/install_DeepSimulator.txt"
 #SBATCH --error="/hpi/fs00/home/nina.ihde/ma/logs/install_DeepSimulator.txt"
