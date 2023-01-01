@@ -11,7 +11,6 @@ enrichment in the laboratory and thus facilitates plasmid sequencing.
 To be able to execute the Python scripts of this repository, please create a virtual environment and install all 
 requirements with the following commands:
 
-    conda install -c anaconda biopython
     pip install -r requirements.txt
 
 ## Preprocessing
@@ -42,6 +41,18 @@ want to generalize our approach for plasmids. We analyzed the produced ``removed
 [`check_contig_cleaning.ipynb`](src/check_contig_cleaning.ipynb) but found the same megaplasmids as in 
 [`check_megaplasmids.py`](src/check_megaplasmids.py) and no suspicious assemblies. 
 
+Lastly, the simulation scripts [`Simulate_pos.R`](src/simulation/Simulate_pos.R) and 
+[`Simulate_neg.R`](src/simulation/Simulate_neg.R) each need an RDS file containing at least 3 
+columns:
+  - ``assembly_accession``: ID of each reference
+  - ``fold1``: which dataset the reference belongs to (``"train"``, ``"val"`` or ``"test"``)
+  - ``Pathogenic``: whether the reference represents the positive class or not (``True`` for plasmids, ``False``for chromosomes)
+
+With [`prepare_simulation.py`](src/prepare_simulation.py), you can create these RDS files per class.
+
+**Note:** We assume an already existing RDS file for the negative class which is only adjusted in the 
+[`prepare_simulation.py`](src/prepare_simulation.py), script! 
+
 ### 3. Simulation
 
 The simulation of the reference data is done with the help of [DeepSimulator](https://github.com/liyu95/DeepSimulator) 
@@ -49,7 +60,7 @@ and a [wrapping workflow](https://gitlab.com/dacs-hpi/deepac/-/tree/master/suppl
 invented by Jakub M. Bartoszewicz. 
 
 First, clone the [DeepSimulator](https://github.com/liyu95/DeepSimulator) project and exchange the ``deep_simulator.sh`` 
-script in ``DeepSimulator/`` with [our adapted version](src/read_simulation/deep_simulator.sh) to avoid executing 
+script in ``DeepSimulator/`` with [our adapted version](src/simulation/deep_simulator.sh) to avoid executing 
 base-calling. Next, install DeepSimulator without installing the included base-callers:
 
     conda remove --name tensorflow_cdpm --all -y
@@ -57,19 +68,6 @@ base-calling. Next, install DeepSimulator without installing the included base-c
     conda activate tensorflow_cdpm
     pip install tensorflow==1.2.1 tflearn==0.3.2 tqdm==4.19.4 scipy==0.18.1 h5py==2.7.1 numpy==1.13.1 scikit-learn==0.20.3 biopython==1.74
     conda deactivate
-
-The simulation scripts [`Simulate_pos.R`](src/read_simulation/Simulate_pos.R) and 
-[`Simulate_neg.R`](src/read_simulation/Simulate_neg.R) each need an RDS file containing at least 3 
-columns:
-  - ``assembly_accession``: ID of each reference
-  - ``fold1``: which dataset the reference belongs to (``"train"``, ``"val"`` or ``"test"``)
-  - ``Pathogenic``: whether the reference represents the positive class or not (``True`` for plasmids, ``False``for chromosomes)
-
-With [`simulation_helper.py`](src/read_simulation/simulation_helper.py), you can create these RDS files per class and 
-calculate the number of reads to simulate (based on a given coverage). 
-
-**Note:** We assume an already existing RDS file for the negative class which is only adjusted in the 
-[`simulation_helper.py`](src/read_simulation/simulation_helper.py) script!
 
 For the execution of the simulation scripts written in R, we recommend setting up a conda environment like this:
 
@@ -83,8 +81,8 @@ you have to store the positive references for training and validation in a commo
 be split after the simulation which is why we have to define fewer paths here. The simulation scripts can be executed 
 with the following commands:
 
-    Rscript src/read_simulation/Simulate_pos.R
-    Rscript src/read_simulation/Simulate_neg.R
+    Rscript src/simulation/Simulate_pos.R
+    Rscript src/simulation/Simulate_neg.R
 
 ### 4. Prepare Normalization
 

@@ -3,16 +3,16 @@ PREPROCESSING STEP 2/4
 This script cleans the reference data of both classes. In addition, it splits the plasmid references it into training,
 validation and test data based on the Jaccard similarity score, as we want to generalize our approach for plasmids. We
 analyzed the produced removed_contigs.csv with check_contig_cleaning.ipynb but found the same megaplasmids as in
-check_megaplasmids.py and no suspicious assemblies. After this script, the simulation can be executed which is followed
-by prepare_training.py.
+check_megaplasmids.py and no suspicious assemblies. Lastly, this script creates respective updates the RDS files needed
+for the simulation.
 """
 
 import click
 import glob
 import os
-import shutil
-
 import pandas as pd
+import pyreadr
+import shutil
 import sourmash
 import time
 
@@ -161,6 +161,32 @@ def split_pos_references(ref_pos_dir_cleaned, split_sim_threshold, random_gen, t
         print(f'References successfully moved to {os.path.basename(ds_dir)}.')
 
 
+def append_refs(rds, ref_dir, ds_type, is_pos_class):
+    for fasta_file in glob.glob(f'{ref_dir}/*.fasta'):
+        rds = pd.concat([rds, pd.DataFrame([{'assembly_accession': os.path.basename(fasta_file)[:-6],
+                                             'fold1': ds_type,
+                                             'Pathogenic': is_pos_class}])],
+                        ignore_index=True)
+    return rds
+
+
+def create_rds_file(train_ref_pos, val_ref_pos, test_ref_pos):
+    rds = pd.DataFrame(columns=['assembly_accession', 'fold1', 'Pathogenic'])
+    rds = append_refs(rds, train_ref_pos, 'train', True)
+    rds = append_refs(rds, val_ref_pos, 'val', True)
+    rds = append_refs(rds, test_ref_pos, 'test', True)
+
+    return rds
+
+
+def adjust_rds_file(chr_rds_path):
+    rds = pyreadr.read_r(chr_rds_path)[None]
+    rds['fold1'] = 'train'
+    rds['Pathogenic'] = False
+
+    return rds
+
+
 @click.command()
 @click.option('--test_real', '-t', type=click.Path(exists=True), required=True,
               help='directory containing real test data (this script uses .fasta references + classify.py uses .fast5')
@@ -179,8 +205,12 @@ def split_pos_references(ref_pos_dir_cleaned, split_sim_threshold, random_gen, t
 @click.option('--split_sim_threshold', '-st', default=0.4,
               help='threshold for sequence similarity score taken in splitting procedure of positive references')
 @click.option('--random_seed', '-s', default=42, help='seed for random operations like splitting datasets')
+@click.option('--plasmid_rds_path', '-rds_pos', help='filepath to new metadata file (.rds) of positive references',
+              type=click.Path(), required=True)
+@click.option('--chr_rds_path', '-rds_neg', help='filepath to metadata file (.rds) of negative references',
+              type=click.Path(exists=True), required=True)
 def main(test_real, ref_pos, ref_neg, train_ref_pos, val_ref_pos, test_ref_pos, clean_sim_threshold,
-         split_sim_threshold, random_seed):
+         split_sim_threshold, random_seed, plasmid_rds_path, chr_rds_path):
     start_time = time.time()
     random_gen = random.default_rng(random_seed)
 
@@ -203,6 +233,14 @@ def main(test_real, ref_pos, ref_neg, train_ref_pos, val_ref_pos, test_ref_pos, 
 
     split_pos_references(ref_pos_cleaned, split_sim_threshold, random_gen, train_ref_pos, val_ref_pos, test_ref_pos)
     print(f'Overall runtime: {time.time() - start_time} seconds')
+
+    # create RDS file for positive class
+    plasmid_rds_data = create_rds_file(train_ref_pos, val_ref_pos, test_ref_pos)
+    pyreadr.write_rds(plasmid_rds_path, plasmid_rds_data)
+
+    # update RDS file of negative class
+    chr_rds_data = adjust_rds_file(chr_rds_path)
+    pyreadr.write_rds(f'{os.path.dirname(chr_rds_path)}/metadata_neg_ref.rds', chr_rds_data)
 
 
 if __name__ == '__main__':
