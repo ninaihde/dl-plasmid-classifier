@@ -115,11 +115,11 @@ def main(test_real, test_sim, test_sim_real, train_sim_neg, train_sim_pos, val_s
         if 'val' in ds_name or 'test' in ds_name:
             label_df = pd.DataFrame(columns=['Read ID', 'GT Label'])
 
-        for file_idx, file in enumerate(glob.glob(f'{ds_path}/*.fast5')):
-            #print(f'File: {file}')
+        for file in glob.glob(f'{ds_path}/*.fast5'):
+            print(f'File: {file}')
 
             with get_fast5_file(file, mode='r') as f5:
-                for read_idx, read in enumerate(f5.get_reads()):
+                for read in f5.get_reads():
                     # store ground truth labels for test dataset (label have to be in file name)
                     if 'test' in ds_name:
                         label = 'plasmid' if 'plasmid' in os.path.basename(file) \
@@ -141,7 +141,7 @@ def main(test_real, test_sim, test_sim_real, train_sim_neg, train_sim_pos, val_s
 
                         # store ground truth labels for validation dataset
                         if 'val' in ds_name:
-                            label = 'plasmid' if 'pos' in ds_name else 'chr'
+                            label = 'plasmid' if 'pos' in ds_name or "plasmid" in ds_name else 'chr'
                             label_df = pd.concat(
                                 [label_df, pd.DataFrame([{'Read ID': read.read_id, 'GT Label': label}])],
                                 ignore_index=True)
@@ -199,8 +199,8 @@ def main(test_real, test_sim, test_sim_real, train_sim_neg, train_sim_pos, val_s
         if 'test' in ds_name:
             label_df.to_csv(f'{out_dir}/gt_{ds_name}_labels.csv', index=False)
         elif 'val' in ds_name:
-            label_df.to_csv(f'{out_dir}/gt_val_{"plasmid" if "pos" in ds_name else "chr"}_labels.csv', index=False)
-            with open(f'{out_dir}/val_{ds_name.split("_")[2]}_read_ids.txt', 'w') as f:
+            label_df.to_csv(f'{out_dir}/gt_val_{"pos" if "pos" in ds_name or "plasmid" in ds_name else "neg"}_labels.csv', index=False)
+            with open(f'{out_dir}/val_{"pos" if "pos" in ds_name or "plasmid" in ds_name else "neg"}_read_ids.txt', 'w') as f:
                 for r_id in label_df['Read ID'].tolist():
                     f.write(f'{str(r_id)}\n')
 
