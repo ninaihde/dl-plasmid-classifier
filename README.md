@@ -21,37 +21,36 @@ the normalization (step 5) and optional base-calling (step 6) step.
 
 ### 1. Get Data
 
-The [`prepare_input.py`](src/prepare_input.py) script takes care of the real data (only used for testing) and the 
-reference data (needed for the simulation of training, validation and testing data). First, it moves already downloaded 
-real data to the respective folders. Here, we ensure that the class label ("plasmid"/"pos" or "chr"/"neg") is stored in 
-the filenames. Second, the script downloads all references and saves them in the correct data format (.fasta). 
+The [`prepare_input.py`](src/preprocessing/prepare_input.py) script takes care of the real data (only used for testing) 
+and the reference data (needed for the simulation of training, validation and testing data). First, it moves already 
+downloaded real data to the respective folders. Here, we ensure that the class label ("plasmid"/"pos" or "chr"/"neg") is 
+stored in the filenames. Second, the script downloads all references and saves them in the correct data format (.fasta). 
 
-**Note:** Make sure to adjust the [`prepare_input.py`](src/prepare_input.py) script for your own data and downloading 
-procedure!
+**Note:** Make sure to adjust the [`prepare_input.py`](src/preprocessing/prepare_input.py) script for your own data and 
+downloading procedure!
 
-After running this script, [`check_megaplasmids.py`](src/check_megaplasmids.py) can be executed to filter out invalid 
-plasmids, i.e. megaplasmids that have more than 450kbp. For our data, we only found two such megaplasmids, one of which 
-was falsely classified and thus manually removed from the dataset.
+After running this script, [`check_megaplasmids.py`](src/preprocessing/check_megaplasmids.py) can be executed to filter 
+out invalid plasmids, i.e. megaplasmids that have more than 450kbp. For our data, we only found two such megaplasmids, 
+one of which was falsely classified and thus manually removed from the dataset.
 
 ### 2. Prepare Simulation
 
-The [`prepare_simulation.py`](src/prepare_simulation.py) script cleans the reference data of both classes. In addition, 
-it splits the plasmid references it into training, validation and test data based on the Jaccard similarity score, as we 
-want to generalize our approach for plasmids. We analyzed the produced ``removed_contigs.csv`` with 
-[`check_contig_cleaning.ipynb`](src/check_contig_cleaning.ipynb) but found the same megaplasmids as in 
-[`check_megaplasmids.py`](src/check_megaplasmids.py) and no suspicious assemblies. 
+The [`prepare_simulation.py`](src/preprocessing/prepare_simulation.py) script cleans the reference data of both classes. 
+In addition, it splits the plasmid references it into training, validation and test data based on the Jaccard similarity 
+score, as we want to generalize our approach for plasmids. We analyzed the produced ``removed_contigs.csv`` with 
+[`check_contig_cleaning.ipynb`](src/preprocessing/check_contig_cleaning.ipynb) but found the same megaplasmids as in 
+[`check_megaplasmids.py`](src/preprocessing/check_megaplasmids.py) and no suspicious assemblies. 
 
-Lastly, the simulation scripts [`Simulate_pos.R`](src/simulation/Simulate_pos.R) and 
-[`Simulate_neg.R`](src/simulation/Simulate_neg.R) each need an RDS file containing at least 3 
-columns:
+Lastly, the simulation scripts [`Simulate_pos.R`](src/preprocessing/simulation/Simulate_pos.R) and 
+[`Simulate_neg.R`](src/preprocessing/simulation/Simulate_neg.R) each need an RDS file containing at least 3 columns:
   - ``assembly_accession``: ID of each reference
   - ``fold1``: which dataset the reference belongs to (``"train"``, ``"val"`` or ``"test"``)
   - ``Pathogenic``: whether the reference represents the positive class or not (``True`` for plasmids, ``False``for chromosomes)
 
-With [`prepare_simulation.py`](src/prepare_simulation.py), you can create these RDS files per class.
+With [`prepare_simulation.py`](src/preprocessing/prepare_simulation.py), you can create these RDS files per class.
 
 **Note:** We assume an already existing RDS file for the negative class which is only adjusted in the 
-[`prepare_simulation.py`](src/prepare_simulation.py), script! 
+[`prepare_simulation.py`](src/preprocessing/prepare_simulation.py), script! 
 
 ### 3. Simulation
 
@@ -60,8 +59,8 @@ and a [wrapping workflow](https://gitlab.com/dacs-hpi/deepac/-/tree/master/suppl
 invented by Jakub M. Bartoszewicz. 
 
 First, clone the [DeepSimulator](https://github.com/liyu95/DeepSimulator) project and exchange the ``deep_simulator.sh`` 
-script in ``DeepSimulator/`` with [our adapted version](src/simulation/deep_simulator.sh) to avoid executing 
-base-calling. Next, install DeepSimulator without installing the included base-callers:
+script in ``DeepSimulator/`` with [our adapted version](src/preprocessing/simulation/deep_simulator.sh) to avoid 
+executing base-calling. Next, install DeepSimulator without installing the included base-callers:
 
     conda remove --name tensorflow_cdpm --all -y
     conda create --name tensorflow_cdpm python=2.7 -y
@@ -81,13 +80,13 @@ you have to store the positive references for training and validation in a commo
 be split after the simulation which is why we have to define fewer paths here. The simulation scripts can be executed 
 with the following commands:
 
-    Rscript src/simulation/Simulate_pos.R
-    Rscript src/simulation/Simulate_neg.R
+    Rscript src/preprocessing/simulation/Simulate_pos.R
+    Rscript src/preprocessing/simulation/Simulate_neg.R
 
 ### 4. Prepare Normalization
 
 Before you are able to normalize the data, with e.g. different maximum sequence lengths, there are 3 steps that have to 
-be done once on the simulated data and are handled by the [`prepare_normalization.py`](src/prepare_normalization.py) 
+be done once on the simulated data and are handled by the [`prepare_normalization.py`](src/preprocessing/prepare_normalization.py) 
 script. First, all single-fast5 files that were created by the simulation need to be merged together into compressed 
 multi-fast5 files to avoid exceeding storage limits on your machine. Optionally, you can decide to remove the original 
 directories with the huge amount of simulated data. Second, the simulated reads for the negative class have to be split 
@@ -97,10 +96,10 @@ possible for the merging and splitting procedure to speed up computation time.
 
 ### 5. Prepare Training
 
-The [`prepare_training.py`](src/prepare_training.py) script normalizes all train and validation data using the z-score 
-with the median absolute deviation. In addition, it performs cutting of the reads to a randomly chosen sequence length 
-and padding of the reads to a fixed length called max_seq_len. Finally, it saves the train and validation data as torch 
-tensors. For the testing datasets, only storing of the ground truth labels is performed.
+The [`prepare_training.py`](src/preprocessing/prepare_training.py) script normalizes all train and validation data using 
+the z-score with the median absolute deviation. In addition, it performs cutting of the reads to a randomly chosen 
+sequence length and padding of the reads to a fixed length called max_seq_len. Finally, it saves the train and validation 
+data as torch tensors. For the testing datasets, only storing of the ground truth labels is performed.
 
 ### 6. Base-Calling
 

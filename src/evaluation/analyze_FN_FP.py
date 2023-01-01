@@ -121,7 +121,7 @@ def main(input_dir, output_dir, prefix, run_id, model_selection_criterion):
     for read_file in glob.glob(f'{output_dir}/{run_id}/sequences*.fastq.gz'):
         for reference_file in glob.glob(f'{input_dir}/Genomes/*.fasta'):
             bam_file = f'{output_dir}/{run_id}/alignment_{os.path.basename(read_file).replace("sequences_", "")}' \
-                      f'_{os.path.basename(reference_file)}.bam'
+                       f'_{os.path.basename(reference_file)}.bam'
             map_sequences(reference_file, read_file, bam_file)
 
     print('Finished.')
