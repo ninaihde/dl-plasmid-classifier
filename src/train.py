@@ -82,14 +82,12 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
               type=click.Path())  # "train_{#epochs}_{run_id}"
 @click.option('--interm', '-i', help='path to checkpoint file of pre-trained model (optional)', required=False,
               type=click.Path(exists=True))
-@click.option('--model_selection_criterion', '-s', default='loss', type=click.Choice(['loss', 'acc']),
-              help='model selection criterion, choose between validation loss ("loss") and validation accuracy ("acc")')
 @click.option('--patience', '-p', default=2, help='patience (i.e., number of epochs) to wait before early stopping')
 @click.option('--batch', '-b', default=1000, help='batch size, default 1000 reads')
 @click.option('--n_workers', '-w', default=8, help='number of workers, default 8')
 @click.option('--n_epochs', '-e', default=5, help='number of epochs, default 5')
 @click.option('--learning_rate', '-l', default=1e-3, help='learning rate, default 1e-3')
-def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm, model_selection_criterion, patience,
+def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm, patience,
          batch, n_workers, n_epochs, learning_rate):
     start_time = time.time()
 
@@ -134,11 +132,9 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
     val_class_weights = torch.tensor(val_class_weights, dtype=torch.float)
     val_criterion = nn.CrossEntropyLoss(weight=val_class_weights).to(device)
 
-    # setup best model consisting of epoch and metric (acc/ loss)
-    if model_selection_criterion == 'acc':
-        best_model = (0, 0)
-    else:
-        best_model = (0, 1)
+    # setup best model consisting of epoch and metric (for accuracy and loss as model selection criterion)
+    best_model_acc = (0, 0)
+    best_model_loss = (0, 1)
 
     # setup early stopping
     last_loss = 1.0
@@ -182,13 +178,11 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
         val_results.to_csv(f'{out_folder}/logs/val_results_epoch{epoch}.csv', index=False)
         torch.save(model.state_dict(), f'{out_folder}/models/model_epoch{epoch}.pt')
 
-        # update best model
-        if model_selection_criterion == 'acc':
-            if best_model[1] < current_val_results['Validation Accuracy']:
-                best_model = (epoch, current_val_results['Validation Accuracy'])
-        else:
-            if best_model[1] > current_val_results['Validation Loss']:
-                best_model = (epoch, current_val_results['Validation Loss'])
+        # update best models
+        if best_model_acc[1] < current_val_results['Validation Accuracy']:
+            best_model_acc = (epoch, current_val_results['Validation Accuracy'])
+        if best_model_loss[1] > current_val_results['Validation Loss']:
+            best_model_loss = (epoch, current_val_results['Validation Loss'])
 
         # avoid overfitting with early stopping
         trigger_times = update_stopping_criterion(current_val_results['Validation Loss'], last_loss, trigger_times)
@@ -196,11 +190,13 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
 
         if trigger_times >= patience:
             print(f'\nTraining would be early stopped!\n'
-                  f'Best model would be reached after {str(best_model[0])} epochs\n'
+                  f'Best model based on accuracy: {best_model_acc}\n'
+                  f'Best model based on loss: {best_model_loss}\n'
                   f'Runtime: {time.time() - start_time} seconds')
             # return  # TODO: comment in again if early stopping criterion is optimized
 
-    print(f'\nBest model reached after epoch no. {str(best_model[0])}\n'
+    print(f'\nBest model based on accuracy: epoch {best_model_acc[0]}, value {best_model_acc[1]}\n'
+          f'\nBest model based on loss: epoch {best_model_loss[0]}, value {best_model_loss[1]}\n'
           f'Runtime: {time.time() - start_time} seconds')
 
 
