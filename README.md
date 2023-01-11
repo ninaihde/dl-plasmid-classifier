@@ -21,12 +21,12 @@ the normalization (step 5) and optional base-calling (step 6) step.
 
 ### 1. Get Data
 
-The [`prepare_input.py`](src/preprocessing/prepare_input.py) script takes care of the real data (only used for testing) 
+The [`get_data.py`](src/preprocessing/get_data.py) script takes care of the real data (only used for testing) 
 and the reference data (needed for the simulation of training, validation and testing data). First, it moves already 
 downloaded real data to the respective folders. Here, we ensure that the class label ("plasmid"/"pos" or "chr"/"neg") is 
 stored in the filenames. Second, the script downloads all references and saves them in the correct data format (.fasta). 
 
-**Note:** Make sure to adjust the [`prepare_input.py`](src/preprocessing/prepare_input.py) script for your own data and 
+**Note:** Make sure to adjust the [`get_data.py`](src/preprocessing/get_data.py) script for your own data and 
 downloading procedure!
 
 After running this script, [`check_megaplasmids.py`](src/preprocessing/check_megaplasmids.py) can be executed to filter 
