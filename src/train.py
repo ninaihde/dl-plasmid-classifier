@@ -10,7 +10,7 @@ import pandas as pd
 import time
 import torch
 
-from dataset import Dataset
+from dataset import CustomizedDataset
 from model import Bottleneck, ResNet
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, confusion_matrix, f1_score, matthews_corrcoef, \
     precision_score, recall_score
@@ -39,7 +39,6 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
                                      ignore_index=True)
 
             # calculate confusion matrix and performance metrics
-            # TODO: reduce number of metrics once final metrics are chosen
             val_labels = val_labels.cpu().numpy()
             tn, fp, fn, tp = confusion_matrix(val_labels, predicted_labels, labels=[1, 0]).ravel()
             totals['TN'] += tn
@@ -68,13 +67,15 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
 
 
 @click.command()
-@click.option('--p_train', '-pt', help='file path of plasmid training set', required=True, type=click.Path(exists=True))
-@click.option('--p_val', '-pv', help='file path of plasmid validation set', required=True, type=click.Path(exists=True))
+@click.option('--p_train', '-pt', help='folder with plasmid training tensor files', required=True,
+              type=click.Path(exists=True))
+@click.option('--p_val', '-pv', help='folder with plasmid validation tensor files', required=True,
+              type=click.Path(exists=True))
 @click.option('--p_ids', '-pid', help='file path of plasmid validation read ids', required=True,
               type=click.Path(exists=True))
-@click.option('--chr_train', '-ct', help='file path of chromosome training set', required=True,
+@click.option('--chr_train', '-ct', help='folder with chromosome training tensor files', required=True,
               type=click.Path(exists=True))
-@click.option('--chr_val', '-cv', help='file path of chromosome validation set', required=True,
+@click.option('--chr_val', '-cv', help='folder with chromosome validation tensor files', required=True,
               type=click.Path(exists=True))
 @click.option('--chr_ids', '-cid', help='file path of chromosome validation read ids', required=True,
               type=click.Path(exists=True))
@@ -108,9 +109,9 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
     params = {'batch_size': batch,
               'shuffle': True,
               'num_workers': n_workers}
-    training_set = Dataset(p_train, chr_train)
+    training_set = CustomizedDataset(p_train, chr_train)
     training_generator = DataLoader(training_set, **params)
-    validation_set = Dataset(p_val, chr_val, p_ids, chr_ids)
+    validation_set = CustomizedDataset(p_val, chr_val, p_ids, chr_ids)
     validation_generator = DataLoader(validation_set, **params)
 
     print(f'Number of batches: {str(len(training_generator))}')
