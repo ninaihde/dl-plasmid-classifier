@@ -178,7 +178,8 @@ def main(test_real, test_sim, test_sim_real, train_sim_neg, train_sim_pos, val_s
             print(f'Number of kept reads in dataset: {batch_idx}')
 
             # normalize if single batch is used and all files are processed
-            if use_single_batch and len(reads) > 0:
+            # or last batch did not reach batch size
+            if (use_single_batch and len(reads) > 0) or (not use_single_batch and len(reads) > 0):
                 reads = normalize(reads)
 
                 for i in range(len(reads)):
