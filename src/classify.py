@@ -9,6 +9,7 @@ import csv
 import glob
 import numpy as np
 import os
+import subprocess as sp
 import time
 import torch
 
@@ -16,6 +17,24 @@ from model import Bottleneck, ResNet
 from numpy import random
 from ont_fast5_api.fast5_interface import get_fast5_file
 from scipy import stats
+from threading import Timer
+
+
+def get_gpu_memory():
+    output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
+    nvidia_cmd = "nvidia-smi --query-gpu=memory.used --format=csv"
+
+    try:
+        memory_use_info = output_to_list(sp.check_output(nvidia_cmd.split(), stderr=sp.STDOUT))[1:]
+    except sp.CalledProcessError as e:
+        raise RuntimeError(f'command {e.cmd} return with error (code {e.returncode}): {e.output}')
+
+    return [int(x.split()[0]) for x in memory_use_info]
+
+
+def print_gpu_memory_every_minute():
+    Timer(60.0, print_gpu_memory_every_minute).start()
+    print(get_gpu_memory())
 
 
 def get_raw_data(file, reads, reads_ids, seq_lengths, cutoff, random_gen, min_seq_len, max_seq_len, cut_after):
@@ -86,7 +105,7 @@ def process(reads, read_ids, batch_idx, bmodel, outpath, device):
 @click.command()
 @click.option('--model', '-m', help='input path to pre-trained model', type=click.Path(exists=True), required=True)
 @click.option('--inpath', '-i', help='input path to fast5 data', type=click.Path(exists=True), required=True)
-@click.option('--outpath', '-o', help='output path for results', type=click.Path(), required=True)  # "classify_{#epochs}_{run_id}"
+@click.option('--outpath', '-o', help='output path for results', type=click.Path(), required=True)  # "classify_{#epochs}_{run_id}", e.g. classify_15epochs_simAcc
 @click.option('--min_seq_len', '-min', default=2000, help='minimum number of raw signals (after cutoff) used per read')
 @click.option('--max_seq_len', '-max', default=4000, help='maximum number of raw signals (after cutoff) used per read')
 @click.option('--cut_after', '-a', default=False,
@@ -96,6 +115,12 @@ def process(reads, read_ids, batch_idx, bmodel, outpath, device):
 @click.option('--cutoff', '-c', default=1000, help='cutoff the first c signals')
 def main(model, inpath, outpath, min_seq_len, max_seq_len, cut_after, batch_size, random_seed, cutoff):
     start_time = time.time()
+
+    # measure GPU memory with nvidia-smi
+    # taken from https://stackoverflow.com/questions/67707828/how-to-get-every-seconds-gpu-usage-in-python
+    print_gpu_memory_every_minute()
+
+    # TODO: "/usr/bin/time -v" to get peak RSS
 
     if min_seq_len >= max_seq_len:
         raise ValueError('The minimum sequence length must be smaller than the maximum sequence length!')
