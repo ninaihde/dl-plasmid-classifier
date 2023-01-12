@@ -99,7 +99,8 @@ possible for the merging and splitting procedure to speed up computation time.
 The [`prepare_training.py`](src/preprocessing/prepare_training.py) script normalizes all train and validation data using 
 the z-score with the median absolute deviation. In addition, it performs cutting of the reads to a randomly chosen 
 sequence length and padding of the reads to a fixed length called max_seq_len. Finally, it saves the train and validation 
-data as torch tensors. For the testing datasets, only storing of the ground truth labels is performed.
+data as torch tensors. For the testing datasets, only storing of the ground truth labels is performed. If several batches
+are used, the training and validation tensor files can be merged with [`merge_tensors.py`](src/preprocessing/merge_tensors.py). 
 
 ### 6. Base-Calling
 

@@ -81,7 +81,7 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, (nn.BatchNorm1d)):
+            elif isinstance(m, nn.BatchNorm1d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
@@ -93,8 +93,7 @@ class ResNet(nn.Module):
                 bcnorm(channels),
             )
 
-        layers = []
-        layers.append(block(self.chan1, channels, stride, downsample))
+        layers = [block(self.chan1, channels, stride, downsample)]
         if stride != 1 or self.chan1 != channels:
             self.chan1 = channels
         for _ in range(1, blocks):
