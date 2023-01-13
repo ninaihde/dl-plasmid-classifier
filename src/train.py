@@ -10,12 +10,13 @@ import pandas as pd
 import time
 import torch
 
-from dataset import CustomizedDataset
+from dataloader import CustomDataLoader
 from model import Bottleneck, ResNet
+from numpy import random
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, confusion_matrix, f1_score, matthews_corrcoef, \
     precision_score, recall_score
 from torch import nn
-from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 
 def validate(out_folder, epoch, validation_generator, device, model, val_criterion):
@@ -25,7 +26,7 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
 
     # set gradient calculation off
     with torch.set_grad_enabled(False):
-        for val_data, val_labels, val_ids in validation_generator:
+        for val_data, val_labels, val_ids in tqdm(validation_generator, desc='val-batch'):
             val_data, val_labels = val_data.to(device), val_labels.to(torch.long).to(device)
             val_outputs = model(val_data)
             val_loss = val_criterion(val_outputs, val_labels)
@@ -54,10 +55,10 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
             totals['Precision'] += precision_score(val_labels, predicted_labels, pos_label=0)
             totals['Recall'] += recall_score(val_labels, predicted_labels, pos_label=0)
 
-    if label_df.empty:
+    if not label_df.empty:
         label_df.to_csv(f'{out_folder}/pred_labels/pred_labels_epoch{epoch}.csv', index=False)
 
-    return {k: v / len(validation_generator) for k, v in totals.items()}
+    return {k: v / validation_generator.get_n_batches() for k, v in totals.items()}
 
 
 def update_stopping_criterion(current_loss, last_loss, trigger_times):
@@ -86,12 +87,13 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
 @click.option('--interm', '-i', help='path to checkpoint file of pre-trained model (optional)', required=False,
               type=click.Path(exists=True))
 @click.option('--patience', '-p', default=2, help='patience (i.e., number of epochs) to wait before early stopping')
-@click.option('--batch', '-b', default=1000, help='batch size, default 1000 reads')
-@click.option('--n_workers', '-w', default=8, help='number of workers, default 8')
+@click.option('--batch_size', '-b', default=1000, help='batch size, default 1000 reads')
+@click.option('--n_workers', '-w', default=4, help='number of workers, default 8')
 @click.option('--n_epochs', '-e', default=5, help='number of epochs, default 5')
 @click.option('--learning_rate', '-l', default=1e-3, help='learning rate, default 1e-3')
+@click.option('--random_seed', '-s', default=42, help='random seed for file shuffling in custom dataloaders')
 def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm, patience,
-         batch, n_workers, n_epochs, learning_rate):
+         batch_size, n_workers, n_epochs, learning_rate, random_seed):
     start_time = time.time()
 
     # set device
@@ -108,18 +110,18 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
         os.makedirs(f'{out_folder}/models')
 
     # load data
-    params = {'batch_size': batch,
+    params = {'batch_size': batch_size,
               'shuffle': True,
               'num_workers': n_workers,
               'pin_memory': True}  # speed up data transfer from CPU to GPU
-    training_set = CustomizedDataset(p_train, chr_train)
-    training_generator = DataLoader(training_set, **params)
-    validation_set = CustomizedDataset(p_val, chr_val, p_ids, chr_ids)
-    validation_generator = DataLoader(validation_set, **params)
+    random_gen = random.default_rng(random_seed)
+    training_generator = CustomDataLoader(p_train, chr_train, params, random_gen)
+    validation_generator = CustomDataLoader(p_val, chr_val, params, random_gen, p_ids, chr_ids)
 
-    print(f'Number of batches: {len(training_generator)}')
-    print(f'Class counts for training: {training_set.get_class_counts()}')
-    print(f'Class counts for validation: {validation_set.get_class_counts()}')
+    print(f'Number of training batches: {training_generator.get_n_batches()}')
+    print(f'Number of validation batches: {validation_generator.get_n_batches()}')
+    print(f'Class counts for training: {training_generator.get_class_counts()}')
+    print(f'Class counts for validation: {validation_generator.get_class_counts()}')
 
     # create new or load pre-trained model
     model = ResNet(Bottleneck, layers=[2, 2, 2, 2]).to(device)
@@ -131,11 +133,13 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
 
     # use sample count per class for balancing the loss while training
     # inspired by https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html
-    train_class_weights = [len(training_set) / (2 * class_count) for class_count in training_set.get_class_counts()]
+    train_class_weights = [training_generator.get_n_reads() / (2 * class_count)
+                           for class_count in training_generator.get_class_counts()]
     train_class_weights = torch.as_tensor(train_class_weights, dtype=torch.float)
     train_criterion = nn.CrossEntropyLoss(weight=train_class_weights).to(device)
 
-    val_class_weights = [len(validation_set) / (2 * class_count) for class_count in validation_set.get_class_counts()]
+    val_class_weights = [validation_generator.get_n_reads() / (2 * class_count)
+                         for class_count in validation_generator.get_class_counts()]
     val_class_weights = torch.as_tensor(val_class_weights, dtype=torch.float)
     val_criterion = nn.CrossEntropyLoss(weight=val_class_weights).to(device)
 
@@ -151,11 +155,8 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
     val_results = pd.DataFrame(columns=['Epoch', 'Validation Loss', 'Validation Accuracy', 'TN', 'FP', 'FN', 'TP',
                                         'Balanced Accuracy', 'F1S', 'MCC', 'Precision', 'Recall'])
 
-    for epoch in range(n_epochs):
-        print(f'\nEpoch: {epoch}')
-
-        for i, (train_data, train_labels, _) in enumerate(training_generator):
-            print(f'\nBatch: {i}')
+    for epoch in tqdm(range(n_epochs), desc='epoch'):
+        for i, (train_data, train_labels, _) in tqdm(enumerate(training_generator), desc='train-batch'):
             train_data, train_labels = train_data.to(device), train_labels.to(torch.long).to(device)
 
             # perform forward propagation
@@ -195,17 +196,18 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
         # avoid overfitting with early stopping
         trigger_times = update_stopping_criterion(current_val_results['Validation Loss'], last_loss, trigger_times)
         last_loss = current_val_results['Validation Loss']
-
         if trigger_times >= patience:
-            print(f'\nTraining would be early stopped!\n'
-                  f'Best model based on accuracy: {best_model_acc}\n'
-                  f'Best model based on loss: {best_model_loss}\n'
-                  f'Runtime: {time.time() - start_time} seconds')
+            print(f'\nTraining would be early stopped!')
             # return  # TODO: comment in again if early stopping criterion is optimized
 
-    print(f'\nBest model based on accuracy: epoch {best_model_acc[0]}, value {best_model_acc[1]}\n'
-          f'Best model based on loss: epoch {best_model_loss[0]}, value {best_model_loss[1]}\n'
-          f'Runtime: {time.time() - start_time} seconds')
+        # log current best model
+        print(f'\nBest model based on accuracy: epoch {best_model_acc[0]}, value {best_model_acc[1]}\n'
+              f'Best model based on loss: epoch {best_model_loss[0]}, value {best_model_loss[1]}\n'
+              f'Runtime: {time.time() - start_time} seconds')
+
+    print(f'\nOverall best model based on accuracy: epoch {best_model_acc[0]}, value {best_model_acc[1]}\n'
+          f'Overall best model based on loss: epoch {best_model_loss[0]}, value {best_model_loss[1]}\n'
+          f'Overall runtime: {time.time() - start_time} seconds')
 
 
 if __name__ == '__main__':

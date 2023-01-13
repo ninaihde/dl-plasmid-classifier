@@ -69,7 +69,7 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
 @click.option('--val_sim_pos', type=click.Path(exists=True), required=True,
               help='directory containing simulated validation data for positive class (.fast5)')
 @click.option('--out_dir', '-o', type=click.Path(), required=True,
-              help='directory for storing labels and read IDs')  # should start with prefix for filtering in evaluation
+              help='directory for storing labels, read IDs and tensor files')  # should start with prefix for filtering in evaluation
 @click.option('--cutoff', '-c', default=1000, help='cutoff the first c signals')
 @click.option('--min_seq_len', '-min', default=2000, help='minimum number of raw signals (after cutoff) used per read')
 @click.option('--max_seq_len', '-max', default=8000, help='maximum number of raw signals (after cutoff) used per read')
