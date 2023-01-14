@@ -25,8 +25,10 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
                             'F1S', 'MCC', 'Precision', 'Recall'], 0)
 
     # set gradient calculation off
+    val_iterations = 0
     with torch.set_grad_enabled(False):
         for val_data, val_labels, val_ids in tqdm(validation_generator, desc='val-batch'):
+            val_iterations += 1
             val_data, val_labels = val_data.to(device), val_labels.to(torch.long).to(device)
             val_outputs = model(val_data)
             val_loss = val_criterion(val_outputs, val_labels)
@@ -57,7 +59,7 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
     if not label_df.empty:
         label_df.to_csv(f'{out_folder}/pred_labels/pred_labels_epoch{epoch}.csv', index=False)
 
-    return {k: v / len(totals) for k, v in totals.items()}
+    return {k: v / val_iterations for k, v in totals.items()}
 
 
 def update_stopping_criterion(current_loss, last_loss, trigger_times):
@@ -66,7 +68,7 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
     else:
         trigger_times = 0
 
-    print(f'Trigger times: {str(trigger_times)}')
+    print(f'\nTrigger times: {str(trigger_times)}')
     return trigger_times
 
 
@@ -174,7 +176,7 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
 
         # validate
         current_val_results = validate(out_folder, epoch, validation_generator, device, model, val_criterion)
-        print(f'Validation Loss: {str(current_val_results["Validation Loss"])}, '
+        print(f'\nValidation Loss: {str(current_val_results["Validation Loss"])}, '
               f'Validation Accuracy: {str(current_val_results["Validation Accuracy"])}')
         current_val_results['Epoch'] = epoch
         val_results = pd.concat([val_results, pd.DataFrame([current_val_results])], ignore_index=True)
@@ -197,10 +199,11 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
             print(f'\nTraining would be early stopped!')
             # return  # TODO: comment in again if early stopping criterion is optimized
 
-        # log current best model
-        print(f'\nBest model based on accuracy: epoch {best_model_acc[0]}, value {best_model_acc[1]}\n'
-              f'Best model based on loss: epoch {best_model_loss[0]}, value {best_model_loss[1]}\n'
-              f'Runtime: {time.time() - start_time} seconds')
+        # log current best model and runtime
+        if epoch != (n_epochs - 1):
+            print(f'\nCurrent best model based on accuracy: epoch {best_model_acc[0]}, value {best_model_acc[1]}\n'
+                  f'Current best model based on loss: epoch {best_model_loss[0]}, value {best_model_loss[1]}\n'
+                  f'Current runtime: {time.time() - start_time} seconds')
 
     print(f'\nOverall best model based on accuracy: epoch {best_model_acc[0]}, value {best_model_acc[1]}\n'
           f'Overall best model based on loss: epoch {best_model_loss[0]}, value {best_model_loss[1]}\n'

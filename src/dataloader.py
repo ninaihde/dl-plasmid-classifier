@@ -1,10 +1,10 @@
 """
 The CustomDataLoader works like a wrapper of the DataLoader class by PyTorch. It creates one DataLoader per file (i.e.,
-loads the file) at the moment the respective file should be processed. This avoids loading/ storing all data at once.
+loads the file) at the moment the respective file should be processed. This avoids loading/ storing all data at once and
+ensures that each file is loaded only once per epoch.
 """
 
 import glob
-import math
 import torch
 
 from dataset import CustomDataset
@@ -32,7 +32,7 @@ class CustomDataLoader:
         self.current_pos_idx = 0
         self.current_neg_idx = 0
 
-        # extract number of reads per class and number of batches
+        # extract number of reads per class
         self.class_counts = {'pos': 0, 'neg': 0}
         for pos_file, neg_file in self.files:
             self.class_counts['pos'] += torch.load(pos_file).shape[0]
@@ -72,7 +72,7 @@ class CustomDataLoader:
 
     def load_next_file(self):
         if len(self.files) <= self.current_file_idx:
-            # reset everything needed to start next iteration
+            # reset everything for next epoch
             self.current_file = None
             self.current_file_idx = 0
             self.current_pos_idx = 0
