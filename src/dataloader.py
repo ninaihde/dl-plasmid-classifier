@@ -34,14 +34,9 @@ class CustomDataLoader:
 
         # extract number of reads per class and number of batches
         self.class_counts = {'pos': 0, 'neg': 0}
-        self.n_batches = 0
         for pos_file, neg_file in self.files:
-            n_pos_reads = torch.load(pos_file).shape[0]
-            self.class_counts['pos'] += n_pos_reads
-            self.n_batches += math.ceil(n_pos_reads / params['batch_size'])
-            n_neg_reads = torch.load(neg_file).shape[0]
-            self.class_counts['neg'] += n_neg_reads
-            self.n_batches += math.ceil(n_neg_reads / params['batch_size'])
+            self.class_counts['pos'] += torch.load(pos_file).shape[0]
+            self.class_counts['neg'] += torch.load(neg_file).shape[0]
 
         # set parameters needed for PyTorch's DataLoader
         self.params = params
@@ -65,9 +60,6 @@ class CustomDataLoader:
         except StopIteration:
             self.current_file = self.load_next_file()
             return next(self.current_file)
-
-    def get_n_batches(self):
-        return self.n_batches
 
     def get_n_reads(self):
         return sum(self.class_counts.values())

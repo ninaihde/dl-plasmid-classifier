@@ -34,7 +34,6 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
 
             # get and store predicted labels
             predicted_labels = val_outputs.max(dim=1).indices.int().data.cpu().numpy()
-
             if 'undefined' not in val_ids:
                 for read_id, label_nr in zip(val_ids, predicted_labels):
                     label = 'plasmid' if label_nr == 0 else 'chr'
@@ -58,7 +57,7 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
     if not label_df.empty:
         label_df.to_csv(f'{out_folder}/pred_labels/pred_labels_epoch{epoch}.csv', index=False)
 
-    return {k: v / validation_generator.get_n_batches() for k, v in totals.items()}
+    return {k: v / len(totals) for k, v in totals.items()}
 
 
 def update_stopping_criterion(current_loss, last_loss, trigger_times):
@@ -118,8 +117,6 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
     training_generator = CustomDataLoader(p_train, chr_train, params, random_gen)
     validation_generator = CustomDataLoader(p_val, chr_val, params, random_gen, p_ids, chr_ids)
 
-    print(f'Number of training batches: {training_generator.get_n_batches()}')
-    print(f'Number of validation batches: {validation_generator.get_n_batches()}')
     print(f'Class counts for training: {training_generator.get_class_counts()}')
     print(f'Class counts for validation: {validation_generator.get_class_counts()}')
 
@@ -178,7 +175,7 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
         # validate
         current_val_results = validate(out_folder, epoch, validation_generator, device, model, val_criterion)
         print(f'Validation Loss: {str(current_val_results["Validation Loss"])}, '
-              f'Validation Accuracy: {str(current_val_results["Validation Loss"])}')
+              f'Validation Accuracy: {str(current_val_results["Validation Accuracy"])}')
         current_val_results['Epoch'] = epoch
         val_results = pd.concat([val_results, pd.DataFrame([current_val_results])], ignore_index=True)
 
