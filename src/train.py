@@ -89,7 +89,7 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
               type=click.Path(exists=True))
 @click.option('--patience', '-p', default=2, help='patience (i.e., number of epochs) to wait before early stopping')
 @click.option('--batch_size', '-b', default=1000, help='batch size, default 1000 reads')
-@click.option('--n_workers', '-w', default=4, help='number of workers, default 8')
+@click.option('--n_workers', '-w', default=4, help='number of workers, default 4')
 @click.option('--n_epochs', '-e', default=5, help='number of epochs, default 5')
 @click.option('--learning_rate', '-l', default=1e-3, help='learning rate, default 1e-3')
 @click.option('--random_seed', '-s', default=42, help='random seed for file shuffling in custom dataloaders')

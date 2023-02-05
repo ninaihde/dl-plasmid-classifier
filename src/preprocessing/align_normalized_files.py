@@ -68,9 +68,8 @@ def main(pos_dir, neg_dir):
     elif n_pos_files < n_neg_files:
         print(f'Reducing amount of files for negative class...')
         reduce_files(neg_files, n_pos_files)
-    elif n_pos_files == n_neg_files:
+    else:
         print(f'Nothing changed because {pos_dir} and {neg_dir} contain the same amount of .pt files!')
-        exit(0)
 
     print(f'Finished. Runtime: {time.time() - start_time} seconds')
 

@@ -93,7 +93,6 @@ def main(test_real, test_sim, test_sim_real, train_sim_neg, train_sim_pos, val_s
     if batch_size == 0:
         use_single_batch = True
 
-    # TODO: add test_sim_real if it is simulated
     for ds_path in [test_real, test_sim, train_sim_neg, train_sim_pos, val_sim_neg, val_sim_pos]:
         ds_name = os.path.basename(ds_path)
         print(f'\nDataset: {ds_name}')
@@ -198,7 +197,7 @@ def main(test_real, test_sim, test_sim_real, train_sim_neg, train_sim_pos, val_s
 
         # store ground truth labels
         if 'test' in ds_name:
-            label_df.to_csv(f'{out_dir}/gt_{ds_name}_labels.csv', index=False)
+            label_df.to_csv(f'{out_dir}/max{max_seq_len}_gt_{ds_name}_labels.csv', index=False)
         elif 'val' in ds_name:
             label_df.to_csv(f'{out_dir}/gt_val_{"pos" if "pos" in ds_name or "plasmid" in ds_name else "neg"}_labels.csv', index=False)
             with open(f'{out_dir}/val_{"pos" if "pos" in ds_name or "plasmid" in ds_name else "neg"}_read_ids.txt', 'w') as f:

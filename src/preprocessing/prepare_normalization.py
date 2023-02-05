@@ -125,6 +125,11 @@ def move_files(output_dir, input_dir):
 @click.option('--val_pct', '-vp', default=0.1, help='splitting percentage for negative validation reads')
 def main(sim_neg, train_sim_neg, train_sim_pos, val_sim_neg, val_sim_pos, test_sim, test_sim_pos, random_seed,
          batch_size, threads, train_pct, val_pct):
+
+    if train_pct + val_pct >= 1.0:
+        raise ValueError('The sum of the training and validation percentage must be smaller than 1 to ensure the '
+                         'existence of a test dataset!')
+
     # convert simulated single-fast5 files into compressed multi-fast5 files
     merge_and_compress(sim_neg, 'neg', batch_size, threads)
     merge_and_compress(train_sim_pos, 'pos', batch_size, threads)

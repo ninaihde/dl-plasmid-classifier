@@ -8,7 +8,7 @@ import glob
 import os
 import pandas as pd
 
-from plot_helper import create_barplot_for_several_metrics, create_lineplot_for_single_metric, \
+from evaluation_helper import create_barplot_for_several_metrics, create_lineplot_for_single_metric, \
     create_lineplot_for_single_metric_twice, create_lineplot_per_max
 
 
@@ -35,6 +35,7 @@ def main(input, output_plots, output_results, prefix, run_id, model_selection_cr
                  'Validation Loss', 'TN', 'FP', 'FN', 'TP', 'Balanced Accuracy', 'F1S', 'MCC', 'Precision', 'Recall',
                  'TNR', 'FPR', 'FNR'])
 
+    # TODO: outdated paths
     for config_folder in [cf for cf in os.listdir(input) if cf.startswith(prefix)]:
         for train_folder in glob.glob(f'{input}/{config_folder}/train_*_{run_id}/logs/'):
             # extract logs
