@@ -17,7 +17,7 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 from scipy import stats
 
 
-def get_raw_data(file, reads, reads_ids, seq_lengths, cutoff, random_gen, min_seq_len, max_seq_len, cut_after):
+def get_raw_data(file, reads, read_ids, seq_lengths, cutoff, random_gen, min_seq_len, max_seq_len, cut_after):
     with get_fast5_file(file, mode='r') as f5:
         for read in f5.get_reads():
             # get raw and scaled read
@@ -27,7 +27,7 @@ def get_raw_data(file, reads, reads_ids, seq_lengths, cutoff, random_gen, min_se
             seq_len = random_gen.integers(min_seq_len, max_seq_len + 1)
 
             if len(raw_data) >= (cutoff + seq_len):
-                reads_ids.append(read.read_id)
+                read_ids.append(read.read_id)
 
                 if cut_after:
                     reads.append(raw_data[cutoff:])
@@ -35,7 +35,7 @@ def get_raw_data(file, reads, reads_ids, seq_lengths, cutoff, random_gen, min_se
                 else:
                     reads.append(raw_data[cutoff:(cutoff + seq_len)])
 
-    return reads, reads_ids, seq_lengths
+    return reads, read_ids, seq_lengths
 
 
 def normalize(data, batch_idx):
@@ -116,7 +116,7 @@ def main(model, inpath, outpath, min_seq_len, max_seq_len, cut_after, batch_size
     seq_lengths = list()
     batch_idx = 0
 
-    for file in glob.glob(inpath + '/*.fast5'):
+    for file in glob.glob(f'{inpath}/*.fast5'):
         reads, read_ids, seq_lengths = \
             get_raw_data(file, reads, read_ids, seq_lengths, cutoff, random_gen, min_seq_len, max_seq_len, cut_after)
 

@@ -140,7 +140,7 @@ def main(test_real, test_sim, test_sim_real, train_sim_neg, train_sim_pos, val_s
 
                         # store ground truth labels for validation dataset
                         if 'val' in ds_name:
-                            label = 'plasmid' if 'pos' in ds_name or "plasmid" in ds_name else 'chr'
+                            label = 'plasmid' if 'pos' in ds_name or 'plasmid' in ds_name else 'chr'
                             label_df = pd.concat(
                                 [label_df, pd.DataFrame([{'Read ID': read.read_id, 'GT Label': label}])],
                                 ignore_index=True)

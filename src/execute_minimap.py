@@ -110,42 +110,30 @@ def basecall_reads(guppy_dir, in_dir, out_dir):
     subprocess.run(guppy_cmd)
 
 
-def merge_basecalled_reads(in_dir):
+def merge_reads(in_dir):
     output_file = f'{in_dir}/{"neg" if "neg" in in_dir else "pos"}.fastq'
     with open(output_file, 'w') as f_out:
         for file in glob.glob(f'{in_dir}/fail/*.fastq') and glob.glob(f'{in_dir}/pass/*.fastq'):
             with open(file, 'r') as f_in:
-                for record in SeqIO.parse(f_in, 'fastq'):
+                for i, record in enumerate(SeqIO.parse(f_in, 'fastq')):
                     r = SeqIO.write(record, f_out, 'fastq')
                     if r != 1:
-                        print(f'Error while writing sequence: {record.id} from {file}')
+                        print(f'Error while writing read {record.id} from {file}')
 
     print(f'Finished merging reads.')
 
 
-def merge_references_per_class(in_dir, cls, suffix=''):
-    merged_references = f'{in_dir}/{cls}_references.fasta'
+def merge_references(in_dir, ds_identifier):
+    merged_references = f'{in_dir}/{ds_identifier}_references.fasta'
     with open(merged_references, 'w') as f_out:
-        for ref in [f for f in glob.glob(f'{in_dir}/*{suffix}.fasta') if os.path.basename(f) != f'{cls}_references.fasta']:
+        for ref in [f for f in glob.glob(f'{in_dir}/*.fasta') if os.path.basename(f) != f'{ds_identifier}_references.fasta']:
             with open(ref, 'r') as f_in:
                 for record in SeqIO.parse(f_in, 'fasta'):
                     r = SeqIO.write(record, f_out, 'fasta')
                     if r != 1:
-                        print(f'Error while writing record {record.id} from {ref}')
+                        print(f'Error while writing reference {record.id} from {ref}')
 
     return merged_references
-
-
-def merge_references(ref_pos_dir, ref_neg_dir=None):
-    if ref_neg_dir is None:  # real data
-        pos_references = merge_references_per_class(ref_pos_dir, 'pos', suffix='_plasmid')
-        neg_references = merge_references_per_class(ref_pos_dir, 'neg', suffix='_chr')
-    else:  # simulated data
-        pos_references = merge_references_per_class(ref_pos_dir, 'pos')
-        neg_references = merge_references_per_class(ref_neg_dir, 'neg')
-
-    print(f'Finished merging references.')
-    return pos_references, neg_references
 
 
 def map_reads(reference_file, read_file, bam_file):
@@ -164,12 +152,10 @@ def map_reads(reference_file, read_file, bam_file):
 
 
 @click.command()
-@click.option('--input_dir', '-i', type=click.Path(exists=True), required=True,
+@click.option('--read_dir', '-r', type=click.Path(exists=True), required=True,
               help='directory containing test reads (.fast5)')
-@click.option('--ref_pos_dir', '-rp', type=click.Path(exists=True), required=False,
-              help='directory containing references of positive class (.fasta)')
-@click.option('--ref_neg_dir', '-rn', type=click.Path(exists=True), required=False,
-              help='directory containing references of negative class (.fasta)')
+@click.option('--ref_dir', '-f', type=click.Path(exists=True), required=True,
+              help='directory containing references (.fasta)')
 @click.option('--output_dir', '-o', type=click.Path(), required=True,
               help='directory containing mapping output files (.bam)')
 @click.option('--guppy_dir', '-g', type=click.Path(exists=True), required=True,
@@ -178,9 +164,12 @@ def map_reads(reference_file, read_file, bam_file):
 @click.option('--min_seq_len', '-min', default=2000, help='minimum number of signals per read')
 @click.option('--max_seq_len', '-max', default=8000, help='maximum number of signals per read')
 @click.option('--random_seed', '-s', default=42, help='seed for random sequence length generation')
-def main(input_dir, ref_pos_dir, ref_neg_dir, output_dir, guppy_dir, cutoff, min_seq_len, max_seq_len, random_seed):
-    cut_dir = f'{input_dir}_max{int(max_seq_len/1000)}'
-    cut_reads(input_dir, cut_dir, cutoff, min_seq_len, max_seq_len, random_seed)
+def main(read_dir, ref_dir, output_dir, guppy_dir, cutoff, min_seq_len, max_seq_len, random_seed):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    cut_dir = f'{read_dir}_max{int(max_seq_len/1000)}'
+    cut_reads(read_dir, cut_dir, cutoff, min_seq_len, max_seq_len, random_seed)
 
     cut_pos_dir = f'{cut_dir}_pos'
     create_dir_per_class(cut_dir, cut_pos_dir, ['pos', 'plasmid'])
@@ -193,27 +182,14 @@ def main(input_dir, ref_pos_dir, ref_neg_dir, output_dir, guppy_dir, cutoff, min
     basecall_reads(guppy_dir, cut_neg_dir, basecall_neg_dir)
 
     # NOTE: merging of reads and references has to be done only once - i.e., skip when testing different maximum lengths
-    merge_basecalled_reads(basecall_pos_dir)
-    merge_basecalled_reads(basecall_neg_dir)
+    merge_reads(basecall_pos_dir)
+    merge_reads(basecall_neg_dir)
+    merged_references = merge_references(ref_dir, os.path.basename(read_dir))
 
-    # real data
-    if ref_pos_dir is None and ref_neg_dir is None:
-        pos_references, neg_references = merge_references(input_dir)
-    # simulated data
-    else:
-        pos_references, neg_references = merge_references(ref_pos_dir, ref_neg_dir)       
-
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        
-    tp_bam = f'{output_dir}/TP.bam'
-    map_reads(pos_references, f'{basecall_pos_dir}/pos.fastq', tp_bam)
-    fp_bam = f'{output_dir}/FP.bam'
-    map_reads(pos_references, f'{basecall_neg_dir}/neg.fastq', fp_bam)
-    fn_bam = f'{output_dir}/FN.bam'
-    map_reads(neg_references, f'{basecall_pos_dir}/pos.fastq', fn_bam)
-    tn_bam = f'{output_dir}/TN.bam'
-    map_reads(neg_references, f'{basecall_neg_dir}/neg.fastq', tn_bam)
+    pos_bam = f'{output_dir}/pos_read_alignments.bam'
+    map_reads(merged_references, f'{basecall_pos_dir}/pos.fastq', pos_bam)
+    neg_bam = f'{output_dir}/neg_read_alignments.bam'
+    map_reads(merged_references, f'{basecall_neg_dir}/neg.fastq', neg_bam)
 
 
 if __name__ == '__main__':
