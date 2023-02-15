@@ -116,7 +116,8 @@ def main(model, inpath, outpath, min_seq_len, max_seq_len, cut_after, batch_size
     seq_lengths = list()
     batch_idx = 0
 
-    for file in glob.glob(f'{inpath}/*.fast5'):
+    files = glob.glob(f'{inpath}/*.fast5')
+    for file in files:
         reads, read_ids, seq_lengths = \
             get_raw_data(file, reads, read_ids, seq_lengths, cutoff, random_gen, min_seq_len, max_seq_len, cut_after)
 
@@ -124,7 +125,7 @@ def main(model, inpath, outpath, min_seq_len, max_seq_len, cut_after, batch_size
         if len(reads) > 0:
             batch_idx += 1
 
-            if batch_idx % batch_size == 0:
+            if (batch_idx % batch_size == 0) or (batch_idx == len(files)):
                 print(f'[Step 1] Done loading data until batch {str(batch_idx)}, '
                       f'Getting {str(len(reads))} of sequences')
 

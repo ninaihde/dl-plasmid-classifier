@@ -46,7 +46,8 @@ def cut_reads(in_dir, out_dir, cutoff, min_seq_len, max_seq_len, random_seed):
                     kept_reads += 1
 
                     # store ground truth labels for validation dataset
-                    label = 'plasmid' if 'pos' in ds_name or 'plasmid' in ds_name else 'chr'
+                    label = 'plasmid' if 'pos' in os.path.basename(input_file) \
+                                         or 'plasmid' in os.path.basename(input_file) else 'chr'
                     label_df = pd.concat(
                         [label_df, pd.DataFrame([{'Read ID': read.read_id, 'GT Label': label}])],
                         ignore_index=True)
@@ -85,7 +86,7 @@ def cut_reads(in_dir, out_dir, cutoff, min_seq_len, max_seq_len, random_seed):
     print(f'Number of kept reads: {kept_reads}')
 
     # store ground truth labels of kept reads
-    label_df.to_csv(f'{out_dir}/gt_{ds_name}_labels.csv', index=False)
+    label_df.to_csv(f'{out_dir}/max{int(max_seq_len/1000)}_gt_{ds_name}_labels.csv', index=False)
 
     print(f'Finished cutting.')
 

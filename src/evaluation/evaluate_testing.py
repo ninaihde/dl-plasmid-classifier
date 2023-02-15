@@ -1,6 +1,6 @@
 """
-This script evaluates the results of the execution of classify.py with test data. Therefore, different evaluation
-metrics are calculated and plotted.
+This script evaluates the results produced by executing classify.py with test data. Therefore, different evaluation
+metrics and time/ resource measurements are calculated and plotted.
 """
 
 import click
@@ -8,7 +8,8 @@ import glob
 import os
 import pandas as pd
 
-from evaluation_helper import create_barplot_for_several_metrics, create_lineplot_per_max, get_time_and_rss, get_max_gpu_usage
+from evaluation_helper import create_barplot_for_several_metrics, create_lineplot_per_max, \
+    create_barplot_per_metric_and_multiple_approaches, get_time_and_rss, convert_to_seconds, get_max_gpu_usage
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, matthews_corrcoef, precision_score, \
     recall_score
 
@@ -77,20 +78,26 @@ def main(input_data, input_logs, output_figures, output_results):
         merged.to_csv(f'{output_results}/OUR_gt_and_pred_labels_{run_name}.csv', index=False)
 
     # add missing metrics and store testing results
-    metrics['TNR'] = metrics['TN'] / (metrics['TN'] + metrics['FP'])  # specificity
     metrics['FPR'] = metrics['FP'] / (metrics['FP'] + metrics['TN'])  # 1 - specificity
-    metrics['FNR'] = metrics['FN'] / (metrics['FN'] + metrics['TP'])
+    metrics['FNR'] = metrics['FN'] / (metrics['FN'] + metrics['TP'])  # 1 - sensitivity
     metrics.to_csv(f'{output_results}/OUR_metrics.csv', index=False)
 
     # create plots with 4 subplots each, each subplot showing the testing results with respect to one metric
     metric_groups = [['Balanced Accuracy', 'Precision', 'MCC', 'F1S'],
                      ['TPR (Sensitivity)', 'TNR (Specificity)', 'FPR', 'FNR']]
-    create_barplot_for_several_metrics(metrics, metric_groups, output_figures, 'test', 'Dataset', 'OUR')
+    create_barplot_for_several_metrics(metrics, metric_groups, output_figures, 'Dataset', 'OUR')
+
+    # embed minimap's metrics
+    metrics['ID'] = metrics['ID'].replace('_15epochs', '', regex=True)
+    metrics['Approach'] = 'Our'
+    minimap_metrics = pd.read_csv(f'{output_results}/MINIMAP_metrics.csv')
+    minimap_metrics['Approach'] = 'Guppy + Minimap'
+    shared_metrics = pd.concat([metrics, minimap_metrics], ignore_index=True)
 
     # plot metrics per maximum sequence length
-    for metric in ['Balanced Accuracy', 'Accuracy', 'F1S', 'Precision', 'TPR (Sensitivity)', 'FPR', 'TNR (Specificity)',
-                   'FNR', 'MCC']:
-        create_lineplot_per_max(metrics, metric, output_figures, 'test', 'Dataset', 'Criterion', 'OUR')
+    for metric in ['Balanced Accuracy', 'Accuracy', 'TPR (Sensitivity)', 'FPR', 'TNR (Specificity)', 'FNR']:
+        create_lineplot_per_max(metrics, metric, output_figures, 'Dataset', 'Criterion', 'OUR')
+        create_barplot_per_metric_and_multiple_approaches(shared_metrics, metric, output_figures, 'SHARED')
 
     # plot memory consumption (peak RSS, GPU) and different times
     times_and_memory = pd.DataFrame(columns=['ID', 'Maximum Sequence Length', 'Dataset', 'Criterion', 'User Time',
@@ -104,13 +111,13 @@ def main(input_data, input_logs, output_figures, output_results):
 
             mx = log_file.split('_')[2].replace('b', '')
             ds = log_file.split('_')[3]
-            ct = log_file.split('_')[4]
+            ct = log_file.split('_')[4].replace('.txt', '')
 
             user_time, system_time, elapsed_time, max_rss = get_time_and_rss(time_file)
             max_gpu_usage = get_max_gpu_usage(nvidia_file, 'python')
 
             times_and_memory = pd.concat([times_and_memory,
-                                          pd.DataFrame([{'ID': f'{mx}_{ds}_{ct}',
+                                          pd.DataFrame([{'ID': f'max{mx}_{ds}_{ct}',
                                                          'Maximum Sequence Length': int(mx) * 1000,
                                                          'Dataset': ds,
                                                          'Criterion': ct,
@@ -122,11 +129,23 @@ def main(input_data, input_logs, output_figures, output_results):
                                          ignore_index=True)
     times_and_memory.to_csv(f'{output_results}/OUR_times_and_memory.csv', index=False)
 
-    create_lineplot_per_max(times_and_memory, 'User Time', output_figures, 'test', 'Dataset', 'Criterion', 'OUR')
-    create_lineplot_per_max(times_and_memory, 'System Time', output_figures, 'test', 'Dataset', 'Criterion', 'OUR')
-    create_lineplot_per_max(times_and_memory, 'Elapsed Time', output_figures, 'test', 'Dataset', 'Criterion', 'OUR')
-    create_lineplot_per_max(times_and_memory, 'Max RSS (GB)', output_figures, 'test', 'Dataset', 'Criterion', 'OUR')
-    create_lineplot_per_max(times_and_memory, 'Max GPU Usage (GiB)', output_figures, 'test', 'Dataset', 'Criterion', 'OUR')
+    # embed minimap's measures
+    times_and_memory['Approach'] = 'Our'
+    minimap_times_and_memory = pd.read_csv(f'{output_results}/MINIMAP_times_and_measures.csv')
+    minimap_times_and_memory['Approach'] = 'Guppy + Minimap'
+    shared_times_and_memory = pd.concat([times_and_memory, minimap_times_and_memory], ignore_index=True)
+
+    for measure in ['User Time', 'System Time', 'Elapsed Time', 'Max RSS (GB)', 'Max GPU Memory Usage (GiB)']:
+        create_lineplot_per_max(times_and_memory, measure, output_figures, 'Dataset', 'Criterion', 'OUR')
+        create_lineplot_per_max(minimap_times_and_memory, measure, output_figures, 'Dataset', None, 'MINIMAP')
+
+    shared_times_and_memory['User Time (seconds)'] = shared_times_and_memory['User Time'].apply(convert_to_seconds)
+    shared_times_and_memory['System Time (seconds)'] = shared_times_and_memory['System Time'].apply(convert_to_seconds)
+    shared_times_and_memory['Elapsed Time (seconds)'] = shared_times_and_memory['Elapsed Time'].apply(convert_to_seconds)
+
+    for measure in ['User Time (seconds)', 'System Time (seconds)', 'Elapsed Time (seconds)', 'Max RSS (GB)',
+                    'Max GPU Memory Usage (GiB)']:
+        create_barplot_per_metric_and_multiple_approaches(shared_times_and_memory, measure, output_figures, 'SHARED')
 
     print('Finished.')
 

@@ -1,5 +1,5 @@
 """
-This script offers helper functions used by the evaluation scripts.
+This script offers helper functions for the visualization and logfile extraction used by the evaluation scripts.
 """
 
 import matplotlib.pyplot as plt
@@ -23,6 +23,11 @@ def get_time_and_rss(logfile):
                 max_rss = int(max_rss) / 1e+6  # GB
 
     return user_time, system_time, elapsed_time, max_rss
+
+
+def convert_to_seconds(time_column):
+    h, m, s = map(int, time_column.split(':'))
+    return int(h) * 3600 + int(m) * 60 + int(s)
 
 
 def get_max_gpu_usage(logfile, process_name):
@@ -88,7 +93,39 @@ def create_lineplot_for_single_metric(data, measure, mx, cut, epochs, plots_dir)
     plt.close()
 
 
-def create_barplot_for_several_metrics(data, metric_collections, plots_dir, type_id, hue, prefix):
+def create_barplot_per_metric_and_multiple_approaches(data, metric, plots_dir, prefix):
+    plotdata = data.copy()
+
+    # prepare ID
+    plotdata['ID'] = plotdata['ID'].replace(['_real', '_sim'], ['', ''], regex=True)
+    plotdata = plotdata.sort_values(by=['ID', 'Dataset'])
+
+    # prepare hue
+    hue = plotdata[['Approach', 'Dataset']].apply(lambda row: f"{row.Approach}, {row.Dataset}", axis=1)
+
+    # create plot
+    fig, ax = plt.subplots(figsize=(22, 16))
+    plt.rcParams['legend.title_fontsize'] = 30
+    sns.barplot(data=plotdata,
+                x='ID',
+                y=metric,
+                hue=hue,
+                palette=sns.color_palette('colorblind'),
+                ci=None)
+
+    # adjust text of subplot
+    plt.xlabel('')
+    ax.tick_params('x', labelsize=24, labelrotation=90)
+    plt.ylabel(metric, fontsize=30)
+    ax.tick_params(axis='y', labelsize=24)
+    ax.legend(title='Approach, Dataset', fontsize=24, bbox_to_anchor=(1, 1))
+
+    plt.tight_layout(pad=6.0)
+    plt.savefig(f'{plots_dir}/{prefix}_{metric.replace(" ", "_")}.png', dpi=300, facecolor='white')
+    plt.close()
+
+
+def create_barplot_for_several_metrics(data, metric_collections, plots_dir, hue, prefix):
     plotdata = data.copy()
     for h in data[hue].unique():
         plotdata['ID'] = plotdata['ID'].replace(f'_{h}', '', regex=True)
@@ -123,27 +160,29 @@ def create_barplot_for_several_metrics(data, metric_collections, plots_dir, type
             ax[i].tick_params(axis='x', labelsize=14)
             ax[i].tick_params(axis='y', labelsize=14)
 
-        plt.suptitle(f'Evaluation of {"Validation" if type_id == "val" else "Test"} Dataset', fontsize=24)
         handles, labels = ax[0].get_legend_handles_labels()
         plt.figlegend(handles, labels, title=hue, ncol=2, fontsize=14, loc='center',
                       bbox_to_anchor=(0.5, 0.9))
 
         plt.tight_layout(pad=6.0)
-        plt.savefig(f'{plots_dir}/{prefix}_{"_".join(metric_collection)}_{hue}_{type_id}.png', dpi=300, facecolor='white')
+        plt.savefig(f'{plots_dir}/{prefix}_{"_".join(metric_collection)}_{hue}.png', dpi=300, facecolor='white')
         plt.close()
 
 
-def create_lineplot_per_max(data, metric, plots_dir, type_id, hue, style, prefix):
+def create_lineplot_per_max(data, metric, plots_dir, hue, style, prefix):
     plotdata = data.copy()
+    if 'Time' in metric:
+        plotdata = plotdata.sort_values(by=metric, ascending=False)
+
     fig, ax = plt.subplots(figsize=(10, 8))
     sns.lineplot(data=plotdata,
                  x='Maximum Sequence Length',
                  y=metric,
                  hue=hue,
-                 style=style)
+                 style=style,
+                 ci=None)
 
     # adjust text
-    plt.title(f'{metric.replace(" (min)", "")} per Maximum Sequence Length', fontsize=22)
     plt.xlabel('Maximum Sequence Length', fontsize=18)
     plt.ylabel(metric, fontsize=18)
     plt.xticks(fontsize=14)
@@ -153,5 +192,5 @@ def create_lineplot_per_max(data, metric, plots_dir, type_id, hue, style, prefix
     ax.legend(fontsize=14, loc='upper left', bbox_to_anchor=(1, 1))
 
     plt.tight_layout()
-    plt.savefig(f'{plots_dir}/{prefix}_{metric.replace(" ", "_")}_per_max_{hue}_{style}_{type_id}.png', dpi=300, facecolor='white')
+    plt.savefig(f'{plots_dir}/{prefix}_{metric.replace(" ", "_")}_per_max_{hue}_{str(style)}.png', dpi=300, facecolor='white')
     plt.close()
