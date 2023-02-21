@@ -1,51 +1,38 @@
 """
 This inference procedure is an extended and adapted version of the one used in the SquiggleNet project, see
-https://github.com/welch-lab/SquiggleNet/blob/master/inference.py. In addition to the original inference procedure, this
-script performs read cutting and padding like done for the train and validation data (see prepare_training.py).
+https://github.com/welch-lab/SquiggleNet/blob/master/inference.py. In addition to the original inference procedure, it
+performs read padding like done for the train and validation data (see prepare_training.py) and uses a custom decision
+threshold. In addition, it makes use of a certain number of reads per batch instead of a certain number of files per
+batch.
 """
 
 import click
-import csv
 import glob
 import numpy as np
 import os
+import pandas as pd
 import torch
 
 from model import Bottleneck, ResNet
-from numpy import random
 from ont_fast5_api.fast5_interface import get_fast5_file
 from scipy import stats
 
 
-def get_raw_data(file, reads, read_ids, seq_lengths, cutoff, random_gen, min_seq_len, max_seq_len, cut_after):
-    with get_fast5_file(file, mode='r') as f5:
-        for read in f5.get_reads():
-            # get raw and scaled read
-            raw_data = read.get_raw_data(scale=True)
+def append_read(read, reads, read_ids):
+    reads.append(read.get_raw_data(scale=True))
+    read_ids.append(read.read_id)
 
-            # get random sequence length per read
-            seq_len = random_gen.integers(min_seq_len, max_seq_len + 1)
-
-            if len(raw_data) >= (cutoff + seq_len):
-                read_ids.append(read.read_id)
-
-                if cut_after:
-                    reads.append(raw_data[cutoff:])
-                    seq_lengths.append(seq_len)
-                else:
-                    reads.append(raw_data[cutoff:(cutoff + seq_len)])
-
-    return reads, read_ids, seq_lengths
+    return reads, read_ids
 
 
-def normalize(data, batch_idx):
+def normalize(data, batch_idx, consistency_correction=1.4826):
     extreme_signals = list()
 
     for r_i, read in enumerate(data):
         # normalize using z-score with median absolute deviation
         median = np.median(read)
         mad = stats.median_abs_deviation(read, scale='normal')
-        data[r_i] = list((read - median) / (1.4826 * mad))
+        data[r_i] = list((read - median) / (consistency_correction * mad))
 
         # get extreme signals (modified absolute z-score larger than 3.5)
         # see Iglewicz and Hoaglin (https://hwbdocuments.env.nm.gov/Los%20Alamos%20National%20Labs/TA%2054/11587.pdf)
@@ -65,40 +52,37 @@ def normalize(data, batch_idx):
     return data
 
 
-def process(reads, read_ids, batch_idx, bmodel, outpath, device):
+def process(reads, read_ids, batch_idx, bmodel, outpath, device, threshold):
     # convert to torch tensors
     reads = torch.tensor(reads).float()
 
     with torch.no_grad():
         data = reads.to(device)
         outputs = bmodel(data)
-        with open(f'{outpath}/batch_{str(batch_idx)}.csv', 'w', newline='\n') as f:
-            csv_writer = csv.writer(f)
-            csv_writer.writerow(['Read ID', 'Predicted Label'])
-            for read_id, label_nr in zip(read_ids, outputs.max(dim=1).indices.int().data.cpu().numpy()):
-                label = 'plasmid' if label_nr == 0 else 'chr'
-                csv_writer.writerow([read_id, label])
-        print(f'[Step 3] Done processing with batch {str(batch_idx)}')
+        sm = torch.nn.Softmax(dim=1)
+        scores = sm(outputs)
+
+        # if score of target class > threshold, classify as plasmid
+        # (opposite comparison because plasmids are indexed with zero)
+        numbers = (scores[:, 0] <= threshold).int().data.cpu().numpy()
+        labels = ['plasmid' if nr == 0 else 'chr' for nr in numbers]
+        results = pd.DataFrame({'Read ID': read_ids, 'Predicted Label': labels})
+        results.to_csv(f'{outpath}/batch_{str(batch_idx)}.csv', index=False)
+
+        print(f'[Step 3] Done processing of batch {str(batch_idx)}')
         del outputs
 
 
 @click.command()
-@click.option('--model', '-m', help='input path to pre-trained model', type=click.Path(exists=True), required=True)
+@click.option('--model', '-m', help='input path to trained model', type=click.Path(exists=True), required=True)
 @click.option('--inpath', '-i', help='input path to fast5 data', type=click.Path(exists=True), required=True)
-@click.option('--outpath', '-o', help='output path for results', type=click.Path(), required=True)  # "max{max_seq_len}_{#epochs}epochs_{dataset}_{criterion}", e.g. max4_15epochs_sim_acc
-@click.option('--min_seq_len', '-min', default=2000, help='minimum number of raw signals (after cutoff) used per read')
+# "max{max_seq_len}_{#epochs}epochs_{dataset}_{criterion}", e.g. max4_15epochs_sim_acc
+@click.option('--outpath', '-o', help='output path for results', type=click.Path(), required=True)
 @click.option('--max_seq_len', '-max', default=4000, help='maximum number of raw signals (after cutoff) used per read')
-@click.option('--cut_after', '-a', default=False,
-              help='whether random sequence length per read is applied before or after normalization')
-@click.option('--batch_size', '-b', default=1, help='batch size')  # test data is sorted by time, so 1 should be representative
-@click.option('--random_seed', '-s', default=42, help='seed for random operations')
-@click.option('--cutoff', '-c', default=1000, help='cutoff the first c signals')
-def main(model, inpath, outpath, min_seq_len, max_seq_len, cut_after, batch_size, random_seed, cutoff):
-    if min_seq_len >= max_seq_len:
-        raise ValueError('The minimum sequence length must be smaller than the maximum sequence length!')
-
-    random_gen = random.default_rng(random_seed)
-
+@click.option('--batch_size', '-b', default=1000, help='number of reads per batch')
+@click.option('--threshold', '-s', default=0.5, help='threshold for final classification decision')
+@click.option('--threads', '-t', default=32, help='number of threads to use for normalization')
+def main(model, inpath, outpath, max_seq_len, batch_size, threshold, threads):
     # set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Device: {device}\n')
@@ -106,50 +90,40 @@ def main(model, inpath, outpath, min_seq_len, max_seq_len, cut_after, batch_size
     if not os.path.exists(outpath):
         os.makedirs(outpath)
 
-    # load pre-trained model
+    # load trained model
     bmodel = ResNet(Bottleneck, layers=[2, 2, 2, 2]).to(device).eval()
     bmodel.load_state_dict(torch.load(model, map_location=device))
     print('[Step 0] Done loading model')
 
-    reads = list()
-    read_ids = list()
-    seq_lengths = list()
-    batch_idx = 0
+    reads, read_ids = list(), list()
+    n_reads, batch_idx = 0, 0
 
     files = glob.glob(f'{inpath}/*.fast5')
-    for file in files:
-        reads, read_ids, seq_lengths = \
-            get_raw_data(file, reads, read_ids, seq_lengths, cutoff, random_gen, min_seq_len, max_seq_len, cut_after)
+    for f_idx, file in enumerate(files):
+        with get_fast5_file(file, mode='r') as f5:
+            reads_to_process = f5.get_read_ids()
+            for r_idx, read in enumerate(f5.get_reads()):
+                reads, read_ids = append_read(read, reads, read_ids)
+                n_reads += 1
 
-        # ensure that cutoff has not removed all reads
-        if len(reads) > 0:
-            batch_idx += 1
-
-            if (batch_idx % batch_size == 0) or (batch_idx == len(files)):
-                print(f'[Step 1] Done loading data until batch {str(batch_idx)}, '
-                      f'Getting {str(len(reads))} of sequences')
-
-                reads = normalize(reads, batch_idx)
-
-                for i, r in enumerate(reads):
-                    if cut_after:
-                        # cut to random sequence length
-                        reads[i] = reads[i][:seq_lengths[i]]
+                if (n_reads == batch_size) or ((f_idx == len(files) - 1) and (r_idx == len(reads_to_process) - 1)):
+                    print(f'[Step 1] Done loading data until batch {str(batch_idx)}')
+                    reads = normalize(reads, batch_idx, threads)
 
                     # pad with zeros until maximum sequence length
-                    reads[i] += [0] * (max_seq_len - len(reads[i]))
+                    reads = [r + [0] * (max_seq_len - len(r)) for r in reads]
 
-                process(reads, read_ids, batch_idx, bmodel, outpath, device)
-                print(f'[Step 4] Done with batch {str(batch_idx)}\n')
+                    process(reads, read_ids, batch_idx, bmodel, outpath, device, threshold)
+                    print(f'[Step 4] Done with batch {str(batch_idx)}\n')
 
-                del reads
-                reads = []
-                del read_ids
-                read_ids = []
-                del seq_lengths
-                seq_lengths = []
+                    del reads
+                    reads = []
+                    del read_ids
+                    read_ids = []
+                    batch_idx += 1
+                    n_reads = 0
 
-    print(f'Finished classification.')
+    print(f'Classification of {batch_idx} batches finished.\n')
 
 
 if __name__ == '__main__':
