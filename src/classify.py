@@ -18,6 +18,9 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 from scipy import stats
 
 
+PLASMID_LABEL = 0
+
+
 def append_read(read, reads, read_ids):
     reads.append(read.get_raw_data(scale=True))
     read_ids.append(read.read_id)
@@ -64,8 +67,8 @@ def process(reads, read_ids, batch_idx, bmodel, outpath, device, threshold):
 
         # if score of target class > threshold, classify as plasmid
         # (opposite comparison because plasmids are indexed with zero)
-        numbers = (scores[:, 0] <= threshold).int().data.cpu().numpy()
-        labels = ['plasmid' if nr == 0 else 'chr' for nr in numbers]
+        numbers = (scores[:, PLASMID_LABEL] <= threshold).int().data.cpu().numpy()
+        labels = ['plasmid' if nr == PLASMID_LABEL else 'chr' for nr in numbers]
         results = pd.DataFrame({'Read ID': read_ids, 'Predicted Label': labels})
         results.to_csv(f'{outpath}/batch_{str(batch_idx)}.csv', index=False)
 
@@ -80,9 +83,8 @@ def process(reads, read_ids, batch_idx, bmodel, outpath, device, threshold):
 @click.option('--outpath', '-o', help='output path for results', type=click.Path(), required=True)
 @click.option('--max_seq_len', '-max', default=4000, help='maximum number of raw signals (after cutoff) used per read')
 @click.option('--batch_size', '-b', default=1000, help='number of reads per batch')
-@click.option('--threshold', '-s', default=0.5, help='threshold for final classification decision')
-@click.option('--threads', '-t', default=32, help='number of threads to use for normalization')
-def main(model, inpath, outpath, max_seq_len, batch_size, threshold, threads):
+@click.option('--threshold', '-t', default=0.5, help='threshold for final classification decision')
+def main(model, inpath, outpath, max_seq_len, batch_size, threshold):
     # set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Device: {device}\n')
@@ -91,7 +93,7 @@ def main(model, inpath, outpath, max_seq_len, batch_size, threshold, threads):
         os.makedirs(outpath)
 
     # load trained model
-    bmodel = ResNet(Bottleneck, layers=[2, 2, 2, 2]).to(device).eval()
+    bmodel = ResNet(Bottleneck, layers=[2, 2, 2, 2]).to(device)
     bmodel.load_state_dict(torch.load(model, map_location=device))
     print('[Step 0] Done loading model')
 
@@ -108,7 +110,7 @@ def main(model, inpath, outpath, max_seq_len, batch_size, threshold, threads):
 
                 if (n_reads == batch_size) or ((f_idx == len(files) - 1) and (r_idx == len(reads_to_process) - 1)):
                     print(f'[Step 1] Done loading data until batch {str(batch_idx)}')
-                    reads = normalize(reads, batch_idx, threads)
+                    reads = normalize(reads, batch_idx)
 
                     # pad with zeros until maximum sequence length
                     reads = [r + [0] * (max_seq_len - len(r)) for r in reads]

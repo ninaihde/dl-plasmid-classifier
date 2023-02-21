@@ -12,13 +12,10 @@ def seconds_to_datetime(time_in_seconds):
 
 
 def get_time_and_rss(logfile):
-    time_per_batch, user_time, system_time, elapsed_time, max_rss = None, None, None, None, None
+    user_time, system_time, elapsed_time, max_rss = None, None, None, None
     with open(logfile) as f:
         for line in f:
-            if 'Overall inference time per batch' in line:
-                time_per_batch = line.split(': ')[1].strip()  # seconds
-                time_per_batch = seconds_to_datetime(time_per_batch)  # h:mm:ss
-            elif 'User time' in line:
+            if 'User time' in line:
                 user_time = line.split(': ')[1].strip()  # seconds
                 user_time = seconds_to_datetime(user_time)  # h:mm:ss
             elif 'System time' in line:
@@ -30,7 +27,7 @@ def get_time_and_rss(logfile):
                 max_rss = line.split(': ')[1].strip()  # KB
                 max_rss = int(max_rss) / 1e+6  # GB
 
-    return time_per_batch, user_time, system_time, elapsed_time, max_rss
+    return user_time, system_time, elapsed_time, max_rss
 
 
 def datetime_to_seconds(datetime_column):

@@ -21,6 +21,9 @@ from scipy import stats
 from sklearn.metrics import roc_curve, auc
 
 
+PLASMID_LABEL = 0
+
+
 # chose 5 plasmids related to Campylobacter coli, Campylobacter jejuni, Leptospira interrogans & Conchiformibius steedae
 REAL_TRAIN_PLASMIDS = ['20220321_1207_MN24598_FAR91003', '20220419_1137_MN24598_FAR92750', 'l_interrogans', 'c_steedae']
 
@@ -65,7 +68,7 @@ def append_read(read, reads, read_ids):
     return reads, read_ids
 
 
-def normalize(data, batch_idx, consistency_correction=1.4826):
+def normalize(data, consistency_correction=1.4826):
     extreme_signals = list()
 
     for r_i, read in enumerate(data):
@@ -101,14 +104,14 @@ def process(reads, read_ids, model, device):
         scores = sm(outputs)
 
         # get scores of target class (plasmids have label 0)
-        plasmid_scores = scores[:, 0].cpu().numpy()
+        plasmid_scores = scores[:, PLASMID_LABEL].cpu().numpy()
         results_per_batch = pd.DataFrame({'Read ID': read_ids, 'Score': plasmid_scores})
         del outputs
 
     return results_per_batch
 
 
-def classify(in_dir, batch_size, max_seq_len, model, device, threads):
+def classify(in_dir, batch_size, max_seq_len, model, device):
     results = pd.DataFrame()
     reads = list()
     read_ids = list()
@@ -124,7 +127,7 @@ def classify(in_dir, batch_size, max_seq_len, model, device, threads):
                 n_reads += 1
 
                 if (n_reads == batch_size) or ((f_idx == len(files) - 1) and (r_idx == len(reads_to_process) - 1)):
-                    reads = normalize(reads, threads)
+                    reads = normalize(reads)
 
                     # pad with zeros until maximum sequence length
                     reads = [r + [0] * (max_seq_len - len(r)) for r in reads]
@@ -149,22 +152,6 @@ def get_best_threshold(results):
     best_idx = np.argmax(tpr - fpr)
     best_threshold = thresholds[best_idx]
     print(f'Optimal decision threshold/s: {best_threshold}')
-
-    return fpr, tpr
-
-
-def plot_roc_curve(fpr, tpr, train_dir, max_seq_len):
-    roc_auc = auc(fpr, tpr)
-    plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % roc_auc)
-    plt.legend(loc='lower right')
-    plt.plot([0, 1], [0, 1], 'r--')
-    plt.xlim([0, 1])
-    plt.ylim([0, 1])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.tight_layout()
-    plt.savefig(f'{train_dir}/roc_curve_max{max_seq_len}.png', dpi=300, facecolor='white', edgecolor='none')
-    plt.close()
 
 
 @click.command()
@@ -215,17 +202,15 @@ def main(input_dir, test_dir, train_dir, trained_model, labels, random_seed, per
 
     # load trained model
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = ResNet(Bottleneck, layers=[2, 2, 2, 2]).to(device).eval()
+    model = ResNet(Bottleneck, layers=[2, 2, 2, 2]).to(device)
     model.load_state_dict(torch.load(trained_model, map_location=device))
 
     # extract plasmid scores & binary ground truth labels
-    results = classify(train_dir, batch_size_classify, max_seq_len * 1000, model, device, threads)
+    results = classify(train_dir, batch_size_classify, max_seq_len * 1000, model, device)
     results = pd.merge(results, gt_train, left_on='Read ID', right_on='Read ID')
-    results.to_csv(f'{train_dir}/result_scores_max{max_seq_len}.csv', index=False)
 
-    # print best threshold and visualize ROC curve
-    fpr, tpr = get_best_threshold(results)
-    plot_roc_curve(fpr, tpr, train_dir, max_seq_len)
+    # print best threshold
+    get_best_threshold(results)
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 """
-The CustomDataLoader works like a wrapper of the DataLoader class by PyTorch. It creates one DataLoader per file (i.e.,
-loads the file) at the moment the respective file should be processed. This avoids loading/ storing all data at once and
+The CustomDataLoader works like a wrapper of PyTorch's DataLoader class. It creates one DataLoader per file (i.e., loads
+the file) at the moment the respective file should be processed. This avoids loading/ storing all data at once and
 ensures that each file is loaded only once per epoch.
 """
 
@@ -14,13 +14,13 @@ from torch.utils.data import DataLoader
 class CustomDataLoader:
     def __init__(self, pos_dir, neg_dir, params, random_gen, pos_ids=None, neg_ids=None):
         # init files
-        p_files = [f for f in glob.glob(f'{pos_dir}/*.pt') if not f.endswith('tensors_merged.pt')]
-        c_files = [f for f in glob.glob(f'{neg_dir}/*.pt') if not f.endswith('tensors_merged.pt')]
+        p_files = glob.glob(f'{pos_dir}/*.pt')
+        c_files = glob.glob(f'{neg_dir}/*.pt')
         self.files = list(zip(p_files, c_files))
         self.current_file = None
         self.current_file_idx = 0
 
-        # set read ID lists (for validation evaluation)
+        # set read ID lists (for validation)
         if pos_ids is not None and neg_ids is not None:
             self.pos_ids = open(pos_ids, 'r').read().split('\n')[:-1]
             self.neg_ids = open(neg_ids, 'r').read().split('\n')[:-1]

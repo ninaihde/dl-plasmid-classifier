@@ -18,14 +18,14 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 from scipy import stats
 
 
-def normalize(data):
+def normalize(data, consistency_correction=1.4826):
     extreme_signals = list()
 
     for r_i, read in enumerate(data):
         # normalize using z-score with median absolute deviation
         median = np.median(read)
         mad = stats.median_abs_deviation(read, scale='normal')
-        data[r_i] = list((read - median) / (1.4826 * mad))
+        data[r_i] = list((read - median) / (consistency_correction * mad))
 
         # get extreme signals (modified absolute z-score larger than 3.5)
         # see Iglewicz and Hoaglin (https://hwbdocuments.env.nm.gov/Los%20Alamos%20National%20Labs/TA%2054/11587.pdf)

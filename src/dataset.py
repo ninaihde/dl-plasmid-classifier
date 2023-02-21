@@ -40,7 +40,7 @@ class CustomDataset(torch.utils.data.Dataset):
             read_id = self.ids[index]
             return X, y, read_id
         else:
-            return X, y, 'undefined'
+            return X, y, None
 
     def get_n_pos_reads(self):
         return self.n_pos_reads

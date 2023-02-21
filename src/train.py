@@ -19,6 +19,10 @@ from torch import nn
 from tqdm import tqdm
 
 
+PLASMID_LABEL = 0
+CHR_LABEL = 1
+
+
 def validate(out_folder, epoch, validation_generator, device, model, val_criterion):
     label_df = pd.DataFrame(columns=['Read ID', 'Predicted Label'])
     totals = dict.fromkeys(['Validation Loss', 'Validation Accuracy', 'TN', 'FP', 'FN', 'TP', 'Balanced Accuracy',
@@ -36,25 +40,25 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
 
             # get and store predicted labels
             predicted_labels = val_outputs.max(dim=1).indices.int().data.cpu().numpy()
-            if 'undefined' not in val_ids:
+            if None not in val_ids:
                 for read_id, label_nr in zip(val_ids, predicted_labels):
-                    label = 'plasmid' if label_nr == 0 else 'chr'
+                    label = 'plasmid' if label_nr == PLASMID_LABEL else 'chr'
                     label_df = pd.concat([label_df, pd.DataFrame([{'Read ID': read_id, 'Predicted Label': label}])],
                                          ignore_index=True)
 
             # calculate confusion matrix and performance metrics
             val_labels = val_labels.cpu().numpy()
-            tn, fp, fn, tp = confusion_matrix(val_labels, predicted_labels, labels=[1, 0]).ravel()
+            tn, fp, fn, tp = confusion_matrix(val_labels, predicted_labels, labels=[CHR_LABEL, PLASMID_LABEL]).ravel()
             totals['TN'] += tn
             totals['FP'] += fp
             totals['FN'] += fn
             totals['TP'] += tp
             totals['Validation Accuracy'] += accuracy_score(val_labels, predicted_labels)
             totals['Balanced Accuracy'] += balanced_accuracy_score(val_labels, predicted_labels)
-            totals['F1S'] += f1_score(val_labels, predicted_labels, pos_label=0)
+            totals['F1S'] += f1_score(val_labels, predicted_labels, pos_label=PLASMID_LABEL)
             totals['MCC'] += matthews_corrcoef(val_labels, predicted_labels)
-            totals['Precision'] += precision_score(val_labels, predicted_labels, pos_label=0)
-            totals['Recall'] += recall_score(val_labels, predicted_labels, pos_label=0)
+            totals['Precision'] += precision_score(val_labels, predicted_labels, pos_label=PLASMID_LABEL)
+            totals['Recall'] += recall_score(val_labels, predicted_labels, pos_label=PLASMID_LABEL)
 
     if not label_df.empty:
         label_df.to_csv(f'{out_folder}/pred_labels/pred_labels_epoch{epoch}.csv', index=False)
@@ -77,15 +81,15 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
               type=click.Path(exists=True))
 @click.option('--p_val', '-pv', help='folder with plasmid validation tensor files', required=True,
               type=click.Path(exists=True))
-@click.option('--p_ids', '-pid', help='file path of plasmid validation read ids', type=click.Path(exists=True))
+@click.option('--p_ids', '-pid', help='file path of plasmid validation read ids', default=None, required=False)
 @click.option('--chr_train', '-ct', help='folder with chromosome training tensor files', required=True,
               type=click.Path(exists=True))
 @click.option('--chr_val', '-cv', help='folder with chromosome validation tensor files', required=True,
               type=click.Path(exists=True))
-@click.option('--chr_ids', '-cid', help='file path of chromosome validation read ids', type=click.Path(exists=True))
+@click.option('--chr_ids', '-cid', help='file path of chromosome validation read ids', default=None, required=False)
 @click.option('--out_folder', '-o', help='output folder path in which logs and models are saved', required=True,
-              type=click.Path())  # "train_{#epochs}_{run_id}"
-@click.option('--interm', '-i', help='path to checkpoint file of pre-trained model (optional)', required=False,
+              type=click.Path())
+@click.option('--interm', '-i', help='path to checkpoint file of already trained model (optional)', required=False,
               type=click.Path(exists=True))
 @click.option('--patience', '-p', default=2, help='patience (i.e., number of epochs) to wait before early stopping')
 @click.option('--batch_size', '-b', default=1000, help='batch size, default 1000 reads')

@@ -8,6 +8,7 @@ import glob
 import os
 import shutil
 import subprocess
+import time
 
 from Bio import SeqIO
 
@@ -27,7 +28,7 @@ def basecall_reads(guppy_dir, in_dir, out_dir):
         os.makedirs(out_dir)
 
     guppy_cmd = [f"{guppy_dir}/bin/guppy_basecaller", "--config", f"{guppy_dir}/data/dna_r9.4.1_450bps_fast.cfg",
-                 "--num_callers", "1", "--gpu_runners_per_device", "4", "--chunks_per_runner", "256", "--chunk_size",
+                 "--num_callers", "2", "--gpu_runners_per_device", "4", "--chunks_per_runner", "256", "--chunk_size",
                  "500", "--device", "cuda:all", "--trim_adapters", "-r", "--trim_primers", "-i", in_dir, "-s", out_dir]
     subprocess.run(guppy_cmd)
 
@@ -69,12 +70,12 @@ def merge_references(ref_pos_dir, ref_neg_dir, out_dir):
 
 def map_reads(reference_file, read_file, bam_file):
     print(f'Mapping {read_file} against reference {reference_file}...')
-    minimap_cmd = ['minimap2', '-ax', 'map-ont', '--secondary=no', reference_file, read_file]
-    minimap_output = subprocess.Popen(minimap_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    minimap_cmd = ['minimap2', '--secondary=no', '-I', '16G', '-ax', 'map-ont', reference_file, read_file]
+    minimap_output = subprocess.Popen(minimap_cmd, stdout=subprocess.PIPE)
 
     samsort_cmd = ['samtools', 'sort', '-O', 'BAM', '-o', bam_file]
-    samsort_output = subprocess.Popen(samsort_cmd, stdin=minimap_output.stdout, stdout=subprocess.DEVNULL,
-                                      stderr=subprocess.DEVNULL)
+    samsort_output = subprocess.Popen(samsort_cmd, stdin=minimap_output.stdout)
+
     minimap_output.stdout.close()
     samsort_output.communicate()
 
