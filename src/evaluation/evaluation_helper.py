@@ -7,26 +7,34 @@ import seaborn as sns
 import time
 
 
+def seconds_to_datetime(time_in_seconds):
+    return time.strftime('%H:%M:%S', time.gmtime(float(time_in_seconds)))
+
+
 def get_time_and_rss(logfile):
+    time_per_batch, user_time, system_time, elapsed_time, max_rss = None, None, None, None, None
     with open(logfile) as f:
         for line in f:
-            if 'User time' in line:
+            if 'Overall inference time per batch' in line:
+                time_per_batch = line.split(': ')[1].strip()  # seconds
+                time_per_batch = seconds_to_datetime(time_per_batch)  # h:mm:ss
+            elif 'User time' in line:
                 user_time = line.split(': ')[1].strip()  # seconds
-                user_time = time.strftime('%H:%M:%S', time.gmtime(float(user_time)))  # h:mm:ss
+                user_time = seconds_to_datetime(user_time)  # h:mm:ss
             elif 'System time' in line:
                 system_time = line.split(': ')[1].strip()  # seconds
-                system_time = time.strftime('%H:%M:%S', time.gmtime(float(system_time)))  # h:mm:ss
+                system_time = seconds_to_datetime(system_time)  # h:mm:ss
             elif 'Elapsed (wall clock) time' in line:
                 elapsed_time = line.split(': ')[1].strip()  # h:mm:ss or m:ss
             elif 'Maximum resident set size' in line:
                 max_rss = line.split(': ')[1].strip()  # KB
                 max_rss = int(max_rss) / 1e+6  # GB
 
-    return user_time, system_time, elapsed_time, max_rss
+    return time_per_batch, user_time, system_time, elapsed_time, max_rss
 
 
-def convert_to_seconds(time_column):
-    h, m, s = map(int, time_column.split(':'))
+def datetime_to_seconds(datetime_column):
+    h, m, s = map(int, datetime_column.split(':'))
     return int(h) * 3600 + int(m) * 60 + int(s)
 
 
@@ -95,13 +103,7 @@ def create_lineplot_for_single_metric(data, measure, mx, cut, epochs, plots_dir)
 
 def create_barplot_per_metric_and_multiple_approaches(data, metric, plots_dir, prefix):
     plotdata = data.copy()
-
-    # prepare ID
-    plotdata['ID'] = plotdata['ID'].replace(['_real', '_sim'], ['', ''], regex=True)
-    plotdata = plotdata.sort_values(by=['ID', 'Dataset'])
-
-    # prepare hue
-    hue = plotdata[['Approach', 'Dataset']].apply(lambda row: f"{row.Approach}, {row.Dataset}", axis=1)
+    plotdata = plotdata.sort_values(by=['ID'])
 
     # create plot
     fig, ax = plt.subplots(figsize=(22, 16))
@@ -109,7 +111,7 @@ def create_barplot_per_metric_and_multiple_approaches(data, metric, plots_dir, p
     sns.barplot(data=plotdata,
                 x='ID',
                 y=metric,
-                hue=hue,
+                hue='Approach',
                 palette=sns.color_palette('colorblind'),
                 ci=None)
 
@@ -118,7 +120,7 @@ def create_barplot_per_metric_and_multiple_approaches(data, metric, plots_dir, p
     ax.tick_params('x', labelsize=24, labelrotation=90)
     plt.ylabel(metric, fontsize=30)
     ax.tick_params(axis='y', labelsize=24)
-    ax.legend(title='Approach, Dataset', fontsize=24, bbox_to_anchor=(1, 1))
+    ax.legend(title='Approach', fontsize=24, bbox_to_anchor=(1, 1))
 
     plt.tight_layout(pad=6.0)
     plt.savefig(f'{plots_dir}/{prefix}_{metric.replace(" ", "_")}.png', dpi=300, facecolor='white')
