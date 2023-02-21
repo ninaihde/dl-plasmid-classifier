@@ -75,7 +75,6 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 30, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 45, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 67, layers[3], stride=2)
-        # self.layer5 = self._make_layer(block, 100, layers[4], stride=2)
 
         # initialization
         for m in self.modules():
@@ -112,7 +111,6 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        # x = self.layer5(x)
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)

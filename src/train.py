@@ -122,7 +122,7 @@ def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm,
     print(f'Class counts for training: {training_generator.get_class_counts()}')
     print(f'Class counts for validation: {validation_generator.get_class_counts()}')
 
-    # create new or load pre-trained model
+    # create new or load trained model
     model = ResNet(Bottleneck, layers=[2, 2, 2, 2]).to(device)
     if interm is not None:
         model.load_state_dict(torch.load(interm))
