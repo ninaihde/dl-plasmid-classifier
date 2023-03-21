@@ -1,6 +1,16 @@
 """
 This script evaluates the results produced by executing classify.py with test data. Therefore, different evaluation
-metrics and time/ resource measurements are calculated and plotted.
+metrics, time and resource measurements are calculated and plotted. In addition, if the result CSV files for the execution
+of minimap2 (see evaluate_minimap.ipynb) are given to this script, plots combining both approaches are created.
+
+Each configuration (see -d and -l parameter) describes a certain dataset type (real or simulated) and maximum sequence
+length applied to the respective test reads. We evaluated six configurations:
+  - max4_real
+  - max6_real
+  - max8_real
+  - max4_sim
+  - max6_sim
+  - max8_sim
 """
 
 import click
@@ -8,31 +18,34 @@ import glob
 import os
 import pandas as pd
 
-from evaluation_helper import create_barplot_for_several_metrics, create_lineplot_per_max, \
-    create_barplot_per_metric_and_multiple_approaches, get_time_and_rss, convert_to_seconds, get_max_gpu_usage
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, matthews_corrcoef, precision_score, \
-    recall_score
+from evaluation_helper import create_barplot_for_several_metrics, create_lineplot_per_max, get_time_and_rss, \
+    get_max_gpu_usage, create_barplot_per_metric_and_multiple_approaches, datetime_to_seconds
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score
 
 
 @click.command()
-@click.option('--input_data', '-d', help='path to root folder containing data', type=click.Path(exists=True),
-              required=True)
-@click.option('--input_logs', '-l', help='path to folder with .txt logs/ all prints', type=click.Path(exists=True),
-              required=True)
-@click.option('--output_figures', '-f', help='folder in which subfolder for created figures of run ID will be stored',
-              type=click.Path(), required=True)
-@click.option('--output_results', '-r', help='path to folder where calculated results will be stored',
-              type=click.Path(), required=True)
-def main(input_data, input_logs, output_figures, output_results):
+@click.option('--input_data', '-d', type=click.Path(exists=True), required=True,
+              help='path to folder containing a subfolder for the classification results of each configuration')
+@click.option('--input_logs', '-l', type=click.Path(exists=True), required=True,
+              help='path to folder with logs (.txt) for each configuration')
+@click.option('--output', '-o', type=click.Path(), required=True,
+              help='output folder for result data and figures')
+@click.option('--minimap_metrics_csv)', '-m', type=click.Path(exists=True), required=False, default=None,
+              help='CSV containing metrics of minimap2 execution')
+@click.option('--minimap_times_csv)', '-t', type=click.Path(exists=True), required=False, default=None,
+              help='CSV containing time and memory consumption measurements of minimap2 execution')
+def main(input_data, input_logs, output, minimap_metrics_csv, minimap_times_csv):
     metrics = pd.DataFrame(
         columns=['ID', 'Maximum Sequence Length', 'Dataset', 'Criterion', 'Epochs', 'TP', 'TN', 'FP', 'FN',
-                 'Accuracy', 'Balanced Accuracy', 'Precision', 'TPR (Sensitivity)', 'TNR (Specificity)', 'F1S', 'MCC'])
+                 'Accuracy', 'Balanced Accuracy', 'Precision', 'TPR (Sensitivity)', 'TNR (Specificity)', 'F1S'])
 
     # create directories for plots and CSVs to be generated
-    if not os.path.exists(output_figures):
-        os.makedirs(output_figures)
-    if not os.path.exists(output_results):
-        os.makedirs(output_results)
+    if not os.path.exists(output):
+        os.makedirs(output)
+    if not os.path.exists(f'{output}/figures'):
+        os.makedirs(f'{output}/figures')
+    if not os.path.exists(f'{output}/results'):
+        os.makedirs(f'{output}/results')
 
     for result_folder in glob.glob(f'{input_data}/*/'):
         run_name = os.path.basename(result_folder[:-1])
@@ -41,11 +54,10 @@ def main(input_data, input_logs, output_figures, output_results):
         dataset = run_name.split('_')[2]
         criterion = run_name.split('_')[3]
 
-        gt = pd.read_csv(f'{input_data}/max{max_seq_len}_gt_test_{dataset}_labels.csv')
-        pred_files = [i for i in glob.glob(f'{result_folder}/*.csv')]
-        pred = pd.concat([pd.read_csv(f) for f in pred_files])
-
         # merge ground truth and predicted labels based on read ID
+        gt = pd.read_csv(f'{input_data}/max{max_seq_len}_gt_test_{dataset}_labels.csv')
+        pred_files = [i for i in glob.glob(f'{result_folder}/batch_*.csv')]
+        pred = pd.concat([pd.read_csv(f) for f in pred_files])
         merged = pd.merge(gt, pred, left_on='Read ID', right_on='Read ID')
 
         # calculate performance metrics of current result folder
@@ -69,51 +81,52 @@ def main(input_data, input_logs, output_figures, output_results):
             # Recall/ TPR: TP / (TP + FN)
             'TNR (Specificity)': recall_score(merged['GT Label'], merged['Predicted Label'], pos_label='chr'),
             # TNR: TN / (TN + FP)
-            'F1S': f1_score(merged['GT Label'], merged['Predicted Label'], pos_label='plasmid'),
-            # harmonic mean between precision and recall
-            'MCC': matthews_corrcoef(merged['GT Label'], merged['Predicted Label']),
+            'F1S': f1_score(merged['GT Label'], merged['Predicted Label'], pos_label='plasmid')
         }])], ignore_index=True)
 
         # store merged dataframe
-        merged.to_csv(f'{output_results}/OUR_gt_and_pred_labels_{run_name}.csv', index=False)
+        merged.to_csv(f'{output}/results/OUR_gt_and_pred_labels_{run_name}.csv', index=False)
 
     # add missing metrics and store testing results
     metrics['FPR'] = metrics['FP'] / (metrics['FP'] + metrics['TN'])  # 1 - specificity
-    metrics['FNR'] = metrics['FN'] / (metrics['FN'] + metrics['TP'])  # 1 - sensitivity
-    metrics.to_csv(f'{output_results}/OUR_metrics.csv', index=False)
+    metrics['FNR'] = metrics['FN'] / (metrics['FN'] + metrics['TP'])
+    metrics['ID'] = metrics['ID'].replace('_15epochs', '', regex=True)
+    metrics.to_csv(f'{output}/results/OUR_metrics.csv', index=False)
 
     # create plots with 4 subplots each, each subplot showing the testing results with respect to one metric
-    metric_groups = [['Balanced Accuracy', 'Precision', 'MCC', 'F1S'],
+    metric_groups = [['Balanced Accuracy', 'Precision', 'Accuracy', 'F1S'],
                      ['TPR (Sensitivity)', 'TNR (Specificity)', 'FPR', 'FNR']]
-    create_barplot_for_several_metrics(metrics, metric_groups, output_figures, 'Dataset', 'OUR')
+    create_barplot_for_several_metrics(metrics, metric_groups, f'{output}/figures', 'Dataset', 'OUR')
 
-    # embed minimap's metrics
-    metrics['ID'] = metrics['ID'].replace('_15epochs', '', regex=True)
-    metrics['Approach'] = 'Our'
-    minimap_metrics = pd.read_csv(f'{output_results}/MINIMAP_metrics.csv')
-    minimap_metrics['Approach'] = 'Guppy + Minimap'
-    shared_metrics = pd.concat([metrics, minimap_metrics], ignore_index=True)
+    if minimap_metrics_csv is not None:
+        # embed minimap2's metrics
+        metrics['Approach'] = 'Our Approach'
+        minimap_metrics = pd.read_csv(minimap_metrics_csv)
+        minimap_metrics['Approach'] = 'Guppy + Minimap2'
+        shared_metrics = pd.concat([metrics, minimap_metrics], ignore_index=True)
+        shared_metrics = shared_metrics[shared_metrics['Criterion'] != 'acc']
+        shared_metrics['ID'] = shared_metrics['ID'].replace(['_loss', '_acc'], ['', ''], regex=True)
+        shared_metrics.to_csv(f'{output}/results/SHARED_metrics.csv', index=False)
 
     # plot metrics per maximum sequence length
     for metric in ['Balanced Accuracy', 'Accuracy', 'TPR (Sensitivity)', 'FPR', 'TNR (Specificity)', 'FNR']:
-        create_lineplot_per_max(metrics, metric, output_figures, 'Dataset', 'Criterion', 'OUR')
-        create_barplot_per_metric_and_multiple_approaches(shared_metrics, metric, output_figures, 'SHARED')
+        create_lineplot_per_max(metrics, metric, f'{output}/figures', 'Dataset', 'Criterion', 'OUR')
+        if minimap_metrics_csv is not None:
+            create_barplot_per_metric_and_multiple_approaches(shared_metrics, metric, f'{output}/figures', 'SHARED')
 
     # plot memory consumption (peak RSS, GPU) and different times
     times_and_memory = pd.DataFrame(columns=['ID', 'Maximum Sequence Length', 'Dataset', 'Criterion', 'User Time',
-                                             'System Time', 'Elapsed Time', 'Max RSS (GB)', 'Max GPU Usage (GiB)'])
+                                             'System Time', 'Elapsed Time', 'Max RSS (GB)', 'Max GPU Memory Usage (GiB)'])
     for log_file in glob.glob(f'{input_logs}/step7_infer_*.txt'):
-        if log_file.endswith('_gpu.txt'):
+        if '_gpu' in log_file:
             continue
         else:
-            time_file = log_file
-            nvidia_file = log_file.replace('.txt', '_gpu.txt')
-
             mx = log_file.split('_')[2].replace('b', '')
             ds = log_file.split('_')[3]
             ct = log_file.split('_')[4].replace('.txt', '')
 
-            user_time, system_time, elapsed_time, max_rss = get_time_and_rss(time_file)
+            user_time, system_time, elapsed_time, max_rss = get_time_and_rss(log_file)            
+            nvidia_file = log_file.replace('.txt', '_gpu.txt')
             max_gpu_usage = get_max_gpu_usage(nvidia_file, 'python')
 
             times_and_memory = pd.concat([times_and_memory,
@@ -125,29 +138,31 @@ def main(input_data, input_logs, output_figures, output_results):
                                                          'System Time': system_time,
                                                          'Elapsed Time': elapsed_time,
                                                          'Max RSS (GB)': max_rss,
-                                                         'Max GPU Usage (GiB)': max_gpu_usage}])],
+                                                         'Max GPU Memory Usage (GiB)': max_gpu_usage}])],
                                          ignore_index=True)
-    times_and_memory.to_csv(f'{output_results}/OUR_times_and_memory.csv', index=False)
-
-    # embed minimap's measures
-    times_and_memory['Approach'] = 'Our'
-    minimap_times_and_memory = pd.read_csv(f'{output_results}/MINIMAP_times_and_measures.csv')
-    minimap_times_and_memory['Approach'] = 'Guppy + Minimap'
-    shared_times_and_memory = pd.concat([times_and_memory, minimap_times_and_memory], ignore_index=True)
+    times_and_memory.to_csv(f'{output}/results/OUR_times_and_memory.csv', index=False)
 
     for measure in ['User Time', 'System Time', 'Elapsed Time', 'Max RSS (GB)', 'Max GPU Memory Usage (GiB)']:
-        create_lineplot_per_max(times_and_memory, measure, output_figures, 'Dataset', 'Criterion', 'OUR')
-        create_lineplot_per_max(minimap_times_and_memory, measure, output_figures, 'Dataset', None, 'MINIMAP')
+        create_lineplot_per_max(times_and_memory, measure, f'{output}/figures', 'Dataset', 'Criterion', 'OUR')
 
-    shared_times_and_memory['User Time (seconds)'] = shared_times_and_memory['User Time'].apply(convert_to_seconds)
-    shared_times_and_memory['System Time (seconds)'] = shared_times_and_memory['System Time'].apply(convert_to_seconds)
-    shared_times_and_memory['Elapsed Time (seconds)'] = shared_times_and_memory['Elapsed Time'].apply(convert_to_seconds)
+    if minimap_times_csv is not None:
+        # embed minimap2's measures
+        times_and_memory['Approach'] = 'Our Approach'
+        minimap_times_and_memory = pd.read_csv(minimap_times_csv)
+        minimap_times_and_memory['Approach'] = 'Guppy + Minimap2'
+        shared_times_and_memory = pd.concat([times_and_memory, minimap_times_and_memory], ignore_index=True)
+        shared_times_and_memory['User Time (seconds)'] = shared_times_and_memory['User Time'].apply(datetime_to_seconds)
+        shared_times_and_memory['System Time (seconds)'] = shared_times_and_memory['System Time'].apply(datetime_to_seconds)
+        shared_times_and_memory['Elapsed Time (seconds)'] = shared_times_and_memory['Elapsed Time'].apply(datetime_to_seconds)
 
-    for measure in ['User Time (seconds)', 'System Time (seconds)', 'Elapsed Time (seconds)', 'Max RSS (GB)',
-                    'Max GPU Memory Usage (GiB)']:
-        create_barplot_per_metric_and_multiple_approaches(shared_times_and_memory, measure, output_figures, 'SHARED')
+        shared_times_and_memory = shared_times_and_memory[shared_times_and_memory['Criterion'] != 'acc']
+        shared_times_and_memory['ID'] = shared_times_and_memory['ID'].replace(['_loss', '_acc'], ['', ''], regex=True)
+        shared_times_and_memory['Elapsed Time (minutes)'] = shared_times_and_memory['Elapsed Time (seconds)'] / 60
+        shared_times_and_memory.to_csv(f'{output}/results/SHARED_times_and_memory.csv', index=False)
 
-    print('Finished.')
+        for measure in ['User Time (seconds)', 'System Time (seconds)', 'Elapsed Time (minutes)', 'Max RSS (GB)',
+                        'Max GPU Memory Usage (GiB)']:
+            create_barplot_per_metric_and_multiple_approaches(shared_times_and_memory, measure, f'{output}/figures', 'SHARED')
 
 
 if __name__ == '__main__':

@@ -1,10 +1,8 @@
 """
-PREPROCESSING STEP 2/4
 This script cleans the reference data of both classes. In addition, it splits the plasmid references it into training,
 validation and test data based on the Jaccard similarity score, as we want to generalize our approach for plasmids. We
 analyzed the produced removed_contigs.csv with check_contig_cleaning.ipynb but found the same megaplasmids as in
-check_megaplasmids.py and no suspicious assemblies. Lastly, this script creates respective updates the RDS files needed
-for the simulation.
+check_megaplasmids.py and no suspicious assemblies. Lastly, this script updates the RDS files needed for the simulation.
 """
 
 import click
@@ -14,7 +12,6 @@ import pandas as pd
 import pyreadr
 import shutil
 import sourmash
-import time
 
 from Bio import SeqIO
 from numpy import random
@@ -189,7 +186,7 @@ def adjust_rds_file(chr_rds_path):
 
 @click.command()
 @click.option('--test_real', '-t', type=click.Path(exists=True), required=True,
-              help='directory containing real test data (this script uses .fasta references + classify.py uses .fast5')
+              help='directory containing real test data (as .fasta references')
 @click.option('--ref_pos', '-p', type=click.Path(exists=True), required=True,
               help='directory containing reference genomes (.fasta) for positive class')
 @click.option('--ref_neg', '-n', type=click.Path(exists=True), required=True,
@@ -211,36 +208,32 @@ def adjust_rds_file(chr_rds_path):
               type=click.Path(exists=True), required=True)
 def main(test_real, ref_pos, ref_neg, train_ref_pos, val_ref_pos, test_ref_pos, clean_sim_threshold,
          split_sim_threshold, random_seed, plasmid_rds_path, chr_rds_path):
-    start_time = time.time()
     random_gen = random.default_rng(random_seed)
 
-    print('Preparing chromosomes...\n')
+    print('Preparing chromosome references...\n')
     ref_neg_cleaned = f'{ref_neg}_cleaned'
     if not os.path.exists(ref_neg_cleaned):
         os.makedirs(ref_neg_cleaned)
 
-    # Note: clean negative before positive references to include potential real plasmids in positive references
+    # remove plasmids from chromosome references
     clean_neg_references(ref_neg, ref_pos, clean_sim_threshold, ref_neg_cleaned)
-    print(f'Runtime passed: {time.time() - start_time} seconds\n')
-
-    print('Preparing plasmids...\n')
-    ref_pos_cleaned = f'{ref_pos}_cleaned'
-    if not os.path.exists(ref_pos_cleaned):
-        os.makedirs(ref_pos_cleaned)
-
-    clean_pos_references(test_real, ref_pos, clean_sim_threshold, ref_pos_cleaned)
-    print(f'Runtime passed: {time.time() - start_time} seconds\n')
-
-    split_pos_references(ref_pos_cleaned, split_sim_threshold, random_gen, train_ref_pos, val_ref_pos, test_ref_pos)
-    print(f'Overall runtime: {time.time() - start_time} seconds')
-
-    # create RDS file for positive class
-    plasmid_rds_data = create_rds_file(train_ref_pos, val_ref_pos, test_ref_pos)
-    pyreadr.write_rds(plasmid_rds_path, plasmid_rds_data)
 
     # update RDS file of negative class
     chr_rds_data = adjust_rds_file(chr_rds_path)
     pyreadr.write_rds(f'{os.path.dirname(chr_rds_path)}/metadata_neg_ref.rds', chr_rds_data)
+
+    print('Preparing plasmid references...\n')
+    ref_pos_cleaned = f'{ref_pos}_cleaned'
+    if not os.path.exists(ref_pos_cleaned):
+        os.makedirs(ref_pos_cleaned)
+
+    # clean and split plasmid references
+    clean_pos_references(test_real, ref_pos, clean_sim_threshold, ref_pos_cleaned)
+    split_pos_references(ref_pos_cleaned, split_sim_threshold, random_gen, train_ref_pos, val_ref_pos, test_ref_pos)
+
+    # create RDS file for positive class
+    plasmid_rds_data = create_rds_file(train_ref_pos, val_ref_pos, test_ref_pos)
+    pyreadr.write_rds(plasmid_rds_path, plasmid_rds_data)
 
 
 if __name__ == '__main__':

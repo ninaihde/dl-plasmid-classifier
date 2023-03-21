@@ -9,7 +9,6 @@ same amount of files per dataset).
 import click
 import glob
 import os
-import time
 import torch
 
 from tqdm import tqdm
@@ -55,7 +54,6 @@ def reduce_files(files, n_remaining_files):
 @click.option('--neg_dir', '-n', help='folder with tensor files of negative class', required=True,
               type=click.Path(exists=True))
 def main(pos_dir, neg_dir):
-    start_time = time.time()
 
     pos_files = [f for f in glob.glob(f'{pos_dir}/*.pt') if not f.endswith('tensors_merged.pt')]
     n_pos_files = len(pos_files)
@@ -70,8 +68,6 @@ def main(pos_dir, neg_dir):
         reduce_files(neg_files, n_pos_files)
     else:
         print(f'Nothing changed because {pos_dir} and {neg_dir} contain the same amount of .pt files!')
-
-    print(f'Finished. Runtime: {time.time() - start_time} seconds')
 
 
 if __name__ == '__main__':

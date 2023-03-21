@@ -1,13 +1,12 @@
 """
-This script checks the plasmid references for megaplasmids, i.e., plasmids that have more than 450kbp. Both,
-non-megaplasmids and megaplasmids are plotted with regards to their length. Finally, we extract all megaplasmids that
-have a certain similarity to our chromosome contigs and check them maually afterwards. Actually, we only found two such
+This script checks the plasmid references for megaplasmids, i.e. plasmids that have more than 450kbp. Both,
+non-megaplasmids and megaplasmids, are plotted with regard to their length. Finally, we extract all megaplasmids that
+have a certain similarity to our chromosome contigs and check them manually afterwards. Actually, we only found two such
 megaplasmids.
 
 Note: Due to our manual checks, the megaplasmid with the ID "LR214949.1" and a length of 843,827 was removed from the
-positive reference data as it is a falsely classified. I.e., it is part of the anomalous and contaminated
-assembly "GCF_900660475.1" (see https://www.ncbi.nlm.nih.gov/assembly/GCF_900660475.1) but nevertheless included in
-the PLSDB.
+positive reference data as it is a falsely classified. It is part of the anomalous and contaminated assembly
+"GCF_900660475.1" (see https://www.ncbi.nlm.nih.gov/assembly/GCF_900660475.1) but nevertheless included in the PLSDB.
 """
 
 import click

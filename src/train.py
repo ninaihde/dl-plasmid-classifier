@@ -13,8 +13,7 @@ import torch
 from dataloader import CustomDataLoader
 from model import Bottleneck, ResNet
 from numpy import random
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, confusion_matrix, f1_score, matthews_corrcoef, \
-    precision_score, recall_score
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, confusion_matrix, f1_score, precision_score, recall_score
 from torch import nn
 from tqdm import tqdm
 
@@ -26,7 +25,7 @@ CHR_LABEL = 1
 def validate(out_folder, epoch, validation_generator, device, model, val_criterion):
     label_df = pd.DataFrame(columns=['Read ID', 'Predicted Label'])
     totals = dict.fromkeys(['Validation Loss', 'Validation Accuracy', 'TN', 'FP', 'FN', 'TP', 'Balanced Accuracy',
-                            'F1S', 'MCC', 'Precision', 'Recall'], 0)
+                            'F1S', 'Precision', 'Recall'], 0)
 
     # set gradient calculation off
     val_iterations = 0
@@ -56,7 +55,6 @@ def validate(out_folder, epoch, validation_generator, device, model, val_criteri
             totals['Validation Accuracy'] += accuracy_score(val_labels, predicted_labels)
             totals['Balanced Accuracy'] += balanced_accuracy_score(val_labels, predicted_labels)
             totals['F1S'] += f1_score(val_labels, predicted_labels, pos_label=PLASMID_LABEL)
-            totals['MCC'] += matthews_corrcoef(val_labels, predicted_labels)
             totals['Precision'] += precision_score(val_labels, predicted_labels, pos_label=PLASMID_LABEL)
             totals['Recall'] += recall_score(val_labels, predicted_labels, pos_label=PLASMID_LABEL)
 
@@ -96,7 +94,7 @@ def update_stopping_criterion(current_loss, last_loss, trigger_times):
 @click.option('--n_workers', '-w', default=4, help='number of workers, default 4')
 @click.option('--n_epochs', '-e', default=5, help='number of epochs, default 5')
 @click.option('--learning_rate', '-l', default=1e-3, help='learning rate, default 1e-3')
-@click.option('--random_seed', '-s', default=42, help='random seed for file shuffling in custom dataloaders')
+@click.option('--random_seed', '-s', default=42, help='random seed for file shuffling of custom data loaders')
 def main(p_train, p_val, p_ids, chr_train, chr_val, chr_ids, out_folder, interm, patience,
          batch_size, n_workers, n_epochs, learning_rate, random_seed):
     start_time = time.time()

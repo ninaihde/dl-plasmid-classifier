@@ -20,7 +20,7 @@ class CustomDataLoader:
         self.current_file = None
         self.current_file_idx = 0
 
-        # set read ID lists (for validation)
+        # set read ID lists (if wanted for validation)
         if pos_ids is not None and neg_ids is not None:
             self.pos_ids = open(pos_ids, 'r').read().split('\n')[:-1]
             self.neg_ids = open(neg_ids, 'r').read().split('\n')[:-1]

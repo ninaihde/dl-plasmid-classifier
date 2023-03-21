@@ -3,7 +3,7 @@
 This project was developed within the scope of a Master Thesis at the Data Analytics and Computational Statistics chair 
 of the Hasso Plattner Institute, University of Potsdam, Germany. It is based on raw electrical signals from Nanopore 
 sequencers and classifies whether a bacterial sample, i.e. a DNA molecule, originates from a bacterial chromosome or a 
-plasmid. This way, adaptive sampling of Nanopore sequencing data can be supported which substitutes expensive plasmid 
+plasmid. This way, adaptive sampling of Nanopore sequencing data can be supported which can substitute expensive plasmid 
 enrichment in the laboratory and thus facilitates plasmid sequencing. The architecture of our approach is based on the
 [SquiggleNet project](https://github.com/welch-lab/SquiggleNet).
 
@@ -14,18 +14,26 @@ requirements with the following command:
 
     pip install -r requirements.txt
 
+To compare our approach against the alignment-based minimap2 tool, we installed the following tools:
+  - guppy_basecaller (version 6.4.2)
+  - minimap2 (version 2.24)
+  - samtools (version 1.6)
+
 ## Preprocessing
 
 The preprocessing is divided into 6 steps which should be executed in the order described as follows. It starts with the 
 collection and cleaning of the data (step 1 and 2), continues with our simulation procedure (step 3 and 4) and ends with 
-the normalization of train (step 5) and preparation of test data (step 6).
+the preparation of train (step 5) and test data (step 6).
 
 ### 1. Get Data
 
-The [`get_data.py`](src/preprocessing/get_data.py) script takes care of the real data (only used for testing) 
-and the reference data (needed for the simulation of training, validation and testing data). First, it moves already 
-downloaded real data to the respective folders. Here, we ensure that the class label ("plasmid"/"pos" or "chr"/"neg") is 
-stored in the filenames. Second, the script downloads all references and saves them in the correct data format (.fasta). 
+The [`get_data.py`](src/preprocessing/get_data.py) script takes care of the real data (only used for testing and tuning 
+purposes) and the reference data (needed for the simulation of training, validation and testing data). First, it moves 
+already downloaded real data to the target folder. Here, we ensure that the class label ("plasmid"/"pos" or "chr"/"neg") 
+is stored in the filenames. The ground truth labels of our real data were assigned with the help of the minimap2 tool. 
+Unfortunately, in case of ambiguous mappings, two exactly equal reads with the same read ID were created - one for each 
+class. This is why we delete duplicate reads. Third, the real data is split into tune and test data. Lastly, the script 
+downloads all references and saves them in the correct data format (.fasta). 
 
 **Note:** Make sure to adjust the [`get_data.py`](src/preprocessing/get_data.py) script for your own data and 
 downloading procedure!
@@ -38,7 +46,7 @@ one of which was falsely classified and thus manually removed from the dataset.
 
 The [`prepare_simulation.py`](src/preprocessing/prepare_simulation.py) script cleans the reference data of both classes. 
 In addition, it splits the plasmid references it into training, validation and test data based on the Jaccard similarity 
-score, as we want to generalize our approach for plasmids. We analyzed the produced ``removed_contigs.csv`` with 
+score, as we want to generalize our approach for novel plasmids. We analyzed the produced ``removed_contigs.csv`` with 
 [`check_contig_cleaning.ipynb`](src/preprocessing/check_contig_cleaning.ipynb) but found the same megaplasmids as in 
 [`check_megaplasmids.py`](src/preprocessing/check_megaplasmids.py) and no suspicious assemblies. 
 
@@ -84,7 +92,7 @@ with the following commands:
     Rscript src/preprocessing/simulation/Simulate_pos.R
     Rscript src/preprocessing/simulation/Simulate_neg.R
 
-### 4. Prepare Normalization
+### 4. Prepare Normalization (Post-Process Simulation)
 
 Before you are able to normalize the data, with e.g. different maximum sequence lengths, there are 3 steps that have to 
 be done once on the simulated data and are handled by the [`prepare_normalization.py`](src/preprocessing/prepare_normalization.py) 
@@ -111,17 +119,12 @@ data to be used for training with the CustomDataLoader (which assumes the same a
 ### 6. Prepare Testing
 
 In the last step of our preprocessing, we prepare both the real and simulated test data in 
-[`prepare_testing.py`](src/preprocessing/prepare_testing.py). The ground truth labels of our real data were assigned 
-with the help of an alignment-based tool. Unfortunately, in case of ambiguous mappings, two exactly equal reads with the
-same read ID were created - one for each class. This is why we first have to assign a random ground truth class for all 
-those reads and remove all reads, which are not selected by this random approach. Afterwards, the FAST5 files with the 
-real and simulated test data are cut to a random sequence length, depending on the given minimum and maximum sequence 
-length.
+[`prepare_testing.py`](src/preprocessing/prepare_testing.py). Therefore, the FAST5 files with the real and simulated 
+test data are cut to a random sequence length, depending on the given minimum and maximum sequence length.
 
-Since we compare our approach against a typical alignment-based method called Minimap2, we need to base-call our test 
-data. The base-calling, i.e. the conversion to FASTQ files, is performed with Guppy:
-
-    guppy_basecaller --config dna_r9.4.1_450bps_fast.cfg --num_callers 2 --gpu_runners_per_device 4 --chunks_per_runner 256 --chunk_size 500 --device cuda:all --trim_adapters -r --trim_primers -i /fast5_dir -s /fastq_dir
+Since we compare our approach against the minimap2 tool, we need to base-call our test data to execute it with this 
+tool. The base-calling, i.e. the conversion to FASTQ files, is performed with Guppy 
+(see [`execute_minimap.py`](src/execute_minimap.py)).
 
 ## Training
 
@@ -138,32 +141,32 @@ how your validation reads were classified during training (read ID to predicted 
 with one read ID per row to the optional parameters ``-pid`` and ``-cid``. In addition, you can pass an already trained 
 model to the parameter ``-i``. 
 
-**Note:** Plasmids are labeled with 0 and chromosomes with 1!
+**Note:** Plasmid reads are labeled with 0 and chromosome reads with 1!
 
-Because of the validation metric calculations, we observed that our model recognized plasmid significantly worse than 
-expected. This is why we decided to calculate the optimal decision threshold with respect to the balanced accuracy for 
-inference (see [`optimize.py`](src/optimize.py)). The optimization is based on a subset of the real test data, thus a 
-reduction of our real test data was performed too.  
+Based on the validation metric calculations, we observed that our model reached a lower balanced accuracy than expected. 
+This is why we decided to calculate the optimal decision threshold with respect to the balanced accuracy for inference 
+per maximum sequence length (see [`optimize.py`](src/optimize.py)). The optimization is based on a subset of the real 
+data we created in [`get_data.py`](src/preprocessing/get_data.py).
 
 ## Testing
 
-The inference is based on the aforementioned reduced real test data and simulated data created in step 3 and 4 of the 
-preprocessing. [`classify.py`](src/classify.py) normalizes and pads the data with zeros like done for the train and 
-validation data. In contrast to SquiggleNet, we create batches for a certain number of reads instead of loading at least 
-one complete file per batch which can significantly degrade performance. Moreover, we make use of a custom decision 
-threshold with a default of 0.5. An example call can look like this:
+The inference is based on the real and simulated test data created in step 1, 3 and 4 of the preprocessing. 
+[`classify.py`](src/classify.py) normalizes and pads the data with zeros like done for the train and validation data. 
+In contrast to SquiggleNet, we create batches for a certain number of reads instead of loading at least one complete 
+file per batch which can significantly degrade performance. Moreover, we make use of a custom decision threshold with a 
+default of 0.5. An example call can look like this:
 
     python classify.py -m path/to/trained/model -i path/to/input -o path/to/output
 
 To situate our approach in current research, [`execute_minimap.py`](src/execute_minimap.py) enables the execution of
-Minimap2. Like already mentioned, base-calling needs to be performed beforehand which is also done by this script.
+minimap2. Like already mentioned, base-calling needs to be performed beforehand which is also done by this script.
 
 ## Evaluation
 
 The inference results of our approach can be evaluated with [`evaluate_testing.py`](src/evaluation/evaluate_testing.py).
 This script calculates different performance metrics, extracts logged measurements and creates corresponding figures. If 
-the Minimap2 results are evaluated with [`evaluate_minimap.ipynb`](src/evaluation/evaluate_minimap.ipynb), 
+minimap2's results are evaluated with [`evaluate_minimap.ipynb`](src/evaluation/evaluate_minimap.ipynb), 
 [`evaluate_testing.py`](src/evaluation/evaluate_testing.py) can create figures based on both approaches. An 
 example call can look like this:
 
-    python evaluate_testing.py -d path/to/results -l path/to/logs -f path/to/figures -r path/to/calculated/metrics
+    python evaluate_testing.py -d path/to/results -l path/to/logs -o path/to/evaluation/outputs

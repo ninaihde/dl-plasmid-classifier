@@ -1,5 +1,4 @@
 """
-PREPROCESSING STEP 3/4
 This script performs all steps that need to be done once on the simulated data. Therefore, it converts the simulated
 single-fast5 files into compressed multi-fast5 files. Additionally, it splits the negative reads into train, validation
 and test data. Finally, it removes all original simulation directories to reduce the amount of stored files.
@@ -137,10 +136,10 @@ def main(sim_neg, train_sim_neg, train_sim_pos, val_sim_neg, val_sim_pos, test_s
     merge_and_compress(test_sim_pos, 'pos', batch_size, threads)
 
     # remove all original simulation directories to reduce amount of stored files (i.e., inodes on server)
-    #shutil.rmtree(sim_neg)
-    #shutil.rmtree(train_sim_pos)
-    #shutil.rmtree(val_sim_pos)
-    #shutil.rmtree(test_sim_pos)
+    shutil.rmtree(sim_neg)
+    shutil.rmtree(train_sim_pos)
+    shutil.rmtree(val_sim_pos)
+    shutil.rmtree(test_sim_pos)
 
     # split simulated reads of negative class and move simulated test data into one folder
     random_gen = random.default_rng(random_seed)

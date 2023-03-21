@@ -173,10 +173,10 @@ Simulate.Reads <- function(DeepSimDir=NULL, InputFastaFile=NULL, ReadCoverage=NU
         # -> if not, stop program and recommend new ulimit size
         num_contigs <- as.numeric(system(paste0("grep -c '^>' ", InputFastaFile), intern=T))
         linux_user <- system("whoami", intern=T)
-        num_open_files <- as.numeric(system(paste0("lsof -u ", linux_user, " | wc -l"), intern=T))
+        num_open_files <- as.numeric(system(paste0("lsof -u ", linux_user, " | wc -l"), intern=T)) # can count files several times!
         max_open_files <- as.numeric(system("ulimit -n", intern=T))
         if (num_contigs >= (max_open_files - num_open_files)) {
-            stop(paste("More files than allowed need to be openend. Set 'ulimit -n' at least to", num_contigs + num_open_files, "\n"))
+            stop(paste("More files than allowed need to be opened. Set 'ulimit -n' at least to", num_contigs + num_open_files, "\n"))
         }
         system(paste0("bioawk -cfastx '{print \">\"$name \" \" $comment \"\\n\" $seq > (", "\"", fasta_folder_split, "\"", "$name\".fasta\")}' ", InputFastaFile))
 

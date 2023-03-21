@@ -1,64 +1,89 @@
 """
 This script optimizes the decision threshold used while inference with respect to the balanced accuracy of the final
-classification decision. The optimization is based on a subset (default: 30%) of the original real testing data which we
-call real train data.
+classification decision. The optimization is based on a subset (default: 30%) of the real data. For each maximum sequence
+length, one version of the real tuning data is created and a respective optimal threshold is calculated.
 """
 
 import click
 import glob
-import matplotlib.pyplot as plt
 import numpy as np
+import ont_fast5_api.fast5_read as f5read
 import os
 import pandas as pd
-import shutil
 import torch
 
 from model import Bottleneck, ResNet
 from numpy import random
-from ont_fast5_api.conversion_tools.fast5_subset import Fast5Filter
 from ont_fast5_api.fast5_interface import get_fast5_file
+from ont_fast5_api.multi_fast5 import MultiFast5File
 from scipy import stats
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve
+from tqdm import tqdm
 
 
 PLASMID_LABEL = 0
 
 
-# chose 5 plasmids related to Campylobacter coli, Campylobacter jejuni, Leptospira interrogans & Conchiformibius steedae
-REAL_TRAIN_PLASMIDS = ['20220321_1207_MN24598_FAR91003', '20220419_1137_MN24598_FAR92750', 'l_interrogans', 'c_steedae']
+def cut_reads(in_dir, out_dir, cutoff, min_seq_len, max_seq_len, random_gen):
+    if min_seq_len >= max_seq_len:
+        raise ValueError('The minimum sequence length must be smaller than the maximum sequence length!')
 
+    ds_name = os.path.basename(out_dir)
+    kept_reads = 0
 
-def move_chromosomes_by_ids(chr_ids, input_dir, output_dir, batch_size, threads):
-    df = pd.DataFrame({'read_id': chr_ids})
-    df.to_csv(f'{output_dir}/{os.path.basename(output_dir)}_chromosomes.csv', index=False, sep='\t')
+    # create file for ground truth labels
+    label_df = pd.DataFrame(columns=['Read ID', 'GT Label'])
 
-    extractor = Fast5Filter(input_folder=input_dir, output_folder=output_dir, filename_base='chr__',
-                            read_list_file=f'{output_dir}/{os.path.basename(output_dir)}_chromosomes.csv',
-                            batch_size=batch_size, threads=threads, recursive=False, follow_symlinks=False,
-                            file_list_file=None)
-    extractor.run_batch()
+    for input_file in tqdm(glob.glob(f'{in_dir}/*.fast5')):
+        output_file = os.path.join(out_dir, os.path.basename(input_file))
+        label = 'plasmid' if any(c in os.path.basename(input_file) for c in ['plasmid', 'pos']) else 'chr'
 
+        with get_fast5_file(input_file, mode='r') as f5_old, MultiFast5File(output_file, mode='w') as f5_new:
+            for i, read in enumerate(f5_old.get_reads()):
+                # get random sequence length per read
+                seq_len = random_gen.integers(min_seq_len, max_seq_len + 1)
 
-def move_chromosomes(random_gen, chr_gt, percentage, input_dir, output_train, output_test, batch_size, threads):
-    # move real train data to new folder
-    chr_ids = chr_gt['Read ID'].tolist()
-    train_chr_ids = random_gen.choice(chr_ids, size=int(len(chr_ids) * percentage), replace=False)
-    move_chromosomes_by_ids(train_chr_ids, input_dir, output_train, batch_size, threads)
+                # only parse reads that are long enough
+                if len(read.handle[read.raw_dataset_name]) >= (cutoff + seq_len):
+                    kept_reads += 1
+                    label_df = pd.concat(
+                        [label_df, pd.DataFrame([{'Read ID': read.read_id, 'GT Label': label}])],
+                        ignore_index=True)
 
-    # move real test data to new folder
-    test_df = chr_gt[~chr_gt['Read ID'].isin(train_chr_ids)]
-    test_chr_ids = test_df['Read ID'].tolist()
-    move_chromosomes_by_ids(test_chr_ids, input_dir, output_test, batch_size, threads)
+                    # fill new fast5 file
+                    read_name = f'read_{read.read_id}'
+                    f5_new.handle.create_group(read_name)
+                    output_group = f5_new.handle[read_name]
+                    f5read.copy_attributes(read.handle.attrs, output_group)
+                    for subgroup in read.handle:
+                        if subgroup == read.raw_dataset_group_name:
+                            raw_attrs = read.handle[read.raw_dataset_group_name].attrs
+                            # remove cutoff and apply random sequence length
+                            raw_data = read.handle[read.raw_dataset_name][cutoff:(cutoff + seq_len)]
+                            output_read = f5_new.get_read(read.read_id)
+                            output_read.add_raw_data(raw_data, raw_attrs)
+                            new_attr = output_read.handle[read.raw_dataset_group_name].attrs
+                            new_attr['duration'] = seq_len
+                            continue
+                        elif subgroup == 'channel_id':
+                            output_group.copy(read.handle[subgroup], subgroup)
+                            continue
+                        else:
+                            if read.run_id in f5_new.run_id_map:
+                                # there may be a group to link to, but we must check it actually exists
+                                hardlink_source = f'read_{f5_new.run_id_map[read.run_id]}/{subgroup}'
+                                if hardlink_source in f5_new.handle:
+                                    hardlink_dest = f'read_{read.read_id}/{subgroup}'
+                                    f5_new.handle[hardlink_dest] = f5_new.handle[hardlink_source]
+                                    continue
+                            # if we couldn't hardlink to anything, we need to make the created group available for future reads
+                            f5_new.run_id_map[read.run_id] = read.read_id
+                        # if we haven't done a special-case copy, we can fall back on the default copy
+                        output_group.copy(read.handle[subgroup], subgroup)
 
-    return train_chr_ids
-
-
-def move_plasmids(input_dir, output_train, output_test):
-    for plasmid_file in glob.glob(f'{input_dir}/*plasmid*.fast5'):
-        if os.path.basename(plasmid_file).startswith(tuple(REAL_TRAIN_PLASMIDS)):
-            shutil.copyfile(plasmid_file, f'{output_train}/{os.path.basename(plasmid_file)}')
-        else:
-            shutil.copyfile(plasmid_file, f'{output_test}/{os.path.basename(plasmid_file)}')
+    # store ground truth labels of kept reads
+    label_df.to_csv(f'{out_dir}/max{int(max_seq_len/1000)}_gt_{ds_name}_labels.csv', index=False)
+    print(f'Number of reads in {out_dir}: {kept_reads}')
 
 
 def append_read(read, reads, read_ids):
@@ -147,70 +172,44 @@ def classify(in_dir, batch_size, max_seq_len, model, device):
     return results
 
 
-def get_best_threshold(results):
+def get_best_threshold(results, mx):
     fpr, tpr, thresholds = roc_curve(results['GT Label'].tolist(), results['Score'].tolist(), pos_label='plasmid')
     best_idx = np.argmax(tpr - fpr)
     best_threshold = thresholds[best_idx]
-    print(f'Optimal decision threshold/s: {best_threshold}')
+    print(f'Optimal decision threshold/s for maximum_sequence_length={mx}: {best_threshold}')
 
 
 @click.command()
-@click.option('--input_dir', '-i', type=click.Path(exists=True), required=True, help='folder path to original real test data')
-@click.option('--test_dir', '-test', type=click.Path(), required=True, help='folder path to new real test data')
-@click.option('--train_dir', '-train', type=click.Path(), required=True, help='folder path to real train data')
+@click.option('--input_dir', '-i', type=click.Path(exists=True), required=True, help='folder path to real tune data')
 @click.option('--trained_model', '-m', type=click.Path(exists=True), required=True, help='path to trained model')
-@click.option('--labels', '-l', type=click.Path(exists=True), required=True,
-              help='file containing read IDs and ground truth labels of original real data')
-@click.option('--random_seed', '-s', default=42, help='seed for selection of random chromosome read IDs')
-@click.option('--percentage', '-p', default=0.3, help='percentage of reads to select for real training dataset')
-@click.option('--batch_size_extract', '-be', default=10000, help='number of reads per batch for FAST5 file creation')
-@click.option('--batch_size_classify', '-bc', default=2000, help='number of reads per batch for classification')
-@click.option('--threads', '-t', default=32, help='number of threads to use for fast5 extraction and normalization')
-@click.option('--max_seq_len', '-max', default=4, help='maximum number of raw signals used per read (in k)')
-def main(input_dir, test_dir, train_dir, trained_model, labels, random_seed, percentage, batch_size_extract,
-         batch_size_classify, threads, max_seq_len):
-    if not os.path.exists(test_dir):
-        os.makedirs(test_dir)
-    if not os.path.exists(train_dir):
-        os.makedirs(train_dir)
-
+@click.option('--batch_size', '-b', default=2000, help='number of reads per batch')
+@click.option('--random_seed', '-s', default=42, help='seed for random operations')
+@click.option('--cutoff', '-c', default=1000, help='cutoff the first c signals')
+@click.option('--min_seq_len', '-min', default=2000, help='minimum number of signals per read')
+@click.option('--max_seq_lens', '-max', multiple=True, default=[4000, 6000, 8000],
+              help='maximum number of signals per read, defining several is possible')
+def main(input_dir, trained_model, batch_size, random_seed, cutoff, min_seq_len, max_seq_lens):
     random_gen = random.default_rng(random_seed)
-    gt = pd.read_csv(labels)
-    chr_gt = gt[gt['GT Label'] == 'chr']
 
-    # split original real test folder
-    train_chr_ids = move_chromosomes(random_gen, chr_gt, percentage, input_dir, train_dir, test_dir, batch_size_extract,
-                                     threads)
-    move_plasmids(input_dir, train_dir, test_dir)
-    
-    # store ground truth data of new real train folder
-    gt_train = pd.DataFrame(columns=['Read ID', 'GT Label'])
-    for file in glob.glob(f'{train_dir}/*plasmid*.fast5'):
-        with get_fast5_file(file, mode='r') as f5:
-            read_ids = f5.get_read_ids()
-            gt_train = pd.concat(
-                [gt_train, pd.DataFrame({'Read ID': read_ids, 'GT Label': ['plasmid'] * len(read_ids)})],
-                ignore_index=True)
-    gt_train = pd.concat([gt_train, pd.DataFrame({'Read ID': train_chr_ids, 'GT Label': ['chr'] * len(train_chr_ids)})],
-                         ignore_index=True)
-    gt_train.to_csv(f'{train_dir}/max{max_seq_len}_gt_train_real_labels.csv', index=False)
-
-    # store ground truth data of new real test folder
-    gt_test = pd.concat([gt, gt_train]).drop_duplicates(keep=False)
-    gt_test.to_csv(f'{test_dir}/max{max_seq_len}_gt_test_real_labels_reduced.csv', index=False)
-    del gt_test
+    # create three versions of tune data, one per maximum sequence length
+    for mx in max_seq_lens:
+        output_dir = f'{input_dir}_max{int(mx / 1000)}'
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        cut_reads(input_dir, output_dir, cutoff, min_seq_len, mx, random_gen)
 
     # load trained model
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = ResNet(Bottleneck, layers=[2, 2, 2, 2]).to(device)
     model.load_state_dict(torch.load(trained_model, map_location=device))
 
-    # extract plasmid scores & binary ground truth labels
-    results = classify(train_dir, batch_size_classify, max_seq_len * 1000, model, device)
-    results = pd.merge(results, gt_train, left_on='Read ID', right_on='Read ID')
-
-    # print best threshold
-    get_best_threshold(results)
+    # get best decision threshold per maximum sequence length
+    for mx in max_seq_lens:
+        tune_input = f'{input_dir}_max{int(mx / 1000)}'
+        results = classify(tune_input, batch_size, mx, model, device)
+        gt_labels = pd.read_csv(f'{tune_input}/max{int(mx/1000)}_gt_{os.path.basename(tune_input)}_labels.csv')
+        results = pd.merge(results, gt_labels, left_on='Read ID', right_on='Read ID')
+        get_best_threshold(results, mx)
 
 
 if __name__ == '__main__':

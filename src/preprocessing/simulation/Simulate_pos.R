@@ -3,11 +3,7 @@
 
 source("src/read_simulation/SimulationWrapper.R")
 
-# inspired by https://stackoverflow.com/questions/13116099/traceback-for-interactive-and-non-interactive-r-sessions/13119318#13119318
-options(error=function()traceback(2))
-
 Workers <- 2
-
 Do.TrainingData <- T
 Do.ValidationData <- T
 Do.TestData <- T
@@ -16,17 +12,10 @@ Do.Balance.test <- T
 Do.GetSizes <- T
 IMG.Sizes <- F
 Do.Clean <- F
-#Simulator <- "Mason"
-# for nanopore
 Simulator <- "DeepSimulator"
 # Only affects Mason v0.x
 AllowNsFromGenome <- F
 
-#ReadLength <- 250
-#MeanFragmentSize <- 600
-#FragmentStdDev <- 60
-#ReadMargin <- 10
-# for nanopore
 ReadLength <- 8000
 MeanFragmentSize <- 8000
 FragmentStdDev <- 0

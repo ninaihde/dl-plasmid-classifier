@@ -66,9 +66,9 @@ def process(reads, read_ids, batch_idx, bmodel, outpath, device, threshold):
         scores = sm(outputs)
 
         # if score of target class > threshold, classify as plasmid
-        # (opposite comparison because plasmids are indexed with zero)
-        numbers = (scores[:, PLASMID_LABEL] <= threshold).int().data.cpu().numpy()
-        labels = ['plasmid' if nr == PLASMID_LABEL else 'chr' for nr in numbers]
+        # (opposite comparison because plasmids are labeled with zero)
+        binary_labels = (scores[:, PLASMID_LABEL] <= threshold).int().data.cpu().numpy()
+        labels = ['plasmid' if nr == PLASMID_LABEL else 'chr' for nr in binary_labels]
         results = pd.DataFrame({'Read ID': read_ids, 'Predicted Label': labels})
         results.to_csv(f'{outpath}/batch_{str(batch_idx)}.csv', index=False)
 
@@ -79,7 +79,6 @@ def process(reads, read_ids, batch_idx, bmodel, outpath, device, threshold):
 @click.command()
 @click.option('--model', '-m', help='input path to trained model', type=click.Path(exists=True), required=True)
 @click.option('--inpath', '-i', help='input path to fast5 data', type=click.Path(exists=True), required=True)
-# "max{max_seq_len}_{#epochs}epochs_{dataset}_{criterion}", e.g. max4_15epochs_sim_acc
 @click.option('--outpath', '-o', help='output path for results', type=click.Path(), required=True)
 @click.option('--max_seq_len', '-max', default=4000, help='maximum number of raw signals (after cutoff) used per read')
 @click.option('--batch_size', '-b', default=1000, help='number of reads per batch')

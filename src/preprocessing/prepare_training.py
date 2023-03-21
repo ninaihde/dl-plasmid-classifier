@@ -1,5 +1,4 @@
 """
-PREPROCESSING STEP 4/4
 This script normalizes all train and validation data using the z-score with the median absolute deviation. In
 addition, it performs cutting of the reads to a randomly chosen sequence length and padding of the reads to a fixed
 length called max_seq_len. Finally, it saves the train and validation data as torch tensors.
@@ -49,20 +48,19 @@ def save_as_tensor(data, outpath_ds, batch_idx, use_single_batch=False):
     data = torch.tensor(data).float()
     tensor_path = f'{outpath_ds}/tensors{"" if use_single_batch else "_" + str(batch_idx)}.pt'
     torch.save(data, tensor_path)
-    #print(f'Torch tensor saved: {tensor_path}')
 
 
 @click.command()
-@click.option('--train_sim_neg', type=click.Path(), required=True,
-              help='directory for simulated train data for negative class (.fast5)')
+@click.option('--train_sim_neg', type=click.Path(exists=True), required=True,
+              help='directory containing simulated train data for negative class (.fast5)')
 @click.option('--train_sim_pos', type=click.Path(exists=True), required=True,
               help='directory containing simulated train data for positive class (.fast5)')
-@click.option('--val_sim_neg', type=click.Path(), required=True,
-              help='directory for simulated validation data for negative class (.fast5)')
+@click.option('--val_sim_neg', type=click.Path(exists=True), required=True,
+              help='directory containing simulated validation data for negative class (.fast5)')
 @click.option('--val_sim_pos', type=click.Path(exists=True), required=True,
               help='directory containing simulated validation data for positive class (.fast5)')
 @click.option('--out_dir', '-o', type=click.Path(), required=True,
-              help='directory for storing labels, read IDs and tensor files')  # should start with prefix for filtering in evaluation
+              help='output directory for storing ground truth labels and tensor files')
 @click.option('--cutoff', '-c', default=1000, help='cutoff the first c signals')
 @click.option('--min_seq_len', '-min', default=2000, help='minimum number of raw signals (after cutoff) used per read')
 @click.option('--max_seq_len', '-max', default=8000, help='maximum number of raw signals (after cutoff) used per read')
@@ -108,8 +106,6 @@ def main(train_sim_neg, train_sim_pos, val_sim_neg, val_sim_pos, out_dir, cutoff
             label_df = pd.DataFrame(columns=['Read ID', 'GT Label'])
 
         for file in glob.glob(f'{ds_path}/*.fast5'):
-            print(f'File: {file}')
-
             with get_fast5_file(file, mode='r') as f5:
                 for read in f5.get_reads():
                     # get raw signals converted to pA values

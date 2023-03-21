@@ -1,5 +1,5 @@
 """
-This script executes base-calling with Guppy, followed by the alignment-based minimap2 tool Thus, "guppy", "minimap2"
+This script executes base-calling with Guppy, followed by the alignment-based minimap2 tool. Thus, "guppy", "minimap2"
 and "samtools" have to be installed beforehand.
 """
 
@@ -8,7 +8,6 @@ import glob
 import os
 import shutil
 import subprocess
-import time
 
 from Bio import SeqIO
 
